@@ -111,3 +111,19 @@ kan_plotter = KANPlot(cvkan_model,
 kan_plotter.plot_all()
 ```
 In rare occasions the random initialization of the weights is suboptimal, which leads to the model not training correctly. If you do not end up with an image similar to [the one displayed above](/src/images/cvkan_sqsq_plot_withcolorbar.svg) or if the resulting Test MSE is way worse than 0.05, please run again.
+
+
+# Functions
+```latex
+f(x) = x^2
+```
+
+
+
+
+# Environment
+
+```bash
+mamba env create -f env.yaml -n cliffordkan
+conda activate cliffordkan
+```
