@@ -11,8 +11,8 @@ import torch_ga
 def make_grid_centers(num_centers_per_dimension: int, ga:torch_ga.GeometricAlgebra, grid_min=-2, grid_max=2):
     """
     Create a grid of RBF centers with grid_shape[i] = number of centers for i-th dimension from GA
-    grid_shape: Tuple[int,...] number of centers per dimensions
-    Rückgabe: Tensor shape (num_centers, ga.dim) als FloatTensor.
+    num_centers_per_dimension: number of centers per dimension
+    return: Tensor with shape (num_centers ^ ga.dim, ga.dim) 
     """
     assert type(num_centers_per_dimension) is int, "num_centers_per_dimension has to be int"
     ranges = [torch.linspace(grid_min, grid_max, steps=num_centers_per_dimension) for _ in range(ga.dim)]
@@ -20,29 +20,32 @@ def make_grid_centers(num_centers_per_dimension: int, ga:torch_ga.GeometricAlgeb
     coords = torch.stack([m.reshape(-1) for m in mesh], dim=-1)  # (num_centers ^ ga.dim, ga.dim)
     assert coords.shape[0]==num_centers_per_dimension ** ga.dim and coords.shape[1]==ga.dim
     return coords
-class Norms:
-    # TODO: come up with Normalizations for Geometric Algebra; have a look at complex-Normalizations for inspiration
-    """Enum for Normalization Types"""
-    LayerNorm = "layernorm"
-    BatchNorm = "batchnorm"  # BN_{\mathbb{C}}
-    BatchNormNaiv = "batchnormnaiv"  # BN_{\mathbb{R}^2}
-    BatchNormVar = "batchnormvar"  # BN_{\mathbb{V}} using variance
-    NoNorm = None
+
+# TODO: come up with Normalizations for Geometric Algebra; have a look at complex-Normalizations for inspiration
+#        probably easiest to start like Eq. (13) from CVKAN paper? --> component-wise Batch-Norm?
+#class Norms:
+#    """Enum for Normalization Types"""
+#    LayerNorm = "layernorm"
+#    BatchNorm = "batchnorm"  # BN_{\mathbb{C}}
+#    BatchNormNaiv = "batchnormnaiv"  # BN_{\mathbb{R}^2}
+#    BatchNormVar = "batchnormvar"  # BN_{\mathbb{V}} using variance
+#    NoNorm = None
 
 
 class CliffordKANLayer(torch.nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, ga: torch_ga.GeometricAlgebra, num_grids: int = 5, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNorm):
+    def __init__(self, input_dim: int, output_dim: int, ga: torch_ga.GeometricAlgebra, num_grids: int = 5, grid_min = -2, grid_max = 2, rho=1):
         """
         :param input_dim: input dimension size of Layer (Layer Width)
         :param output_dim: output dimension size of Layer (next Layer's Width)
+        :param ga: GeometricAlgebra to use
         :param num_grids: number of grid points ***per dimension***
         :param grid_min: left limit of grid
         :param grid_max: right limit of grid
         :param rho: rho for use in RBF (default rho=1)
-        :param use_norm: which Normalization scheme to use
         """
+        # TODO: :param use_norm: which Normalization scheme to use
         # TODO: experiment with something similar to param csilu_type: the kind of CSiLU to use ('complex_weight' or 'real_weights') but for Clifford-Algebra
-        # past experiments with CVKAN have shown that some residual function like SiLU etc. is very necessary for training.
+        #       previous experiments with CVKAN have shown that some residual function like SiLU etc. is very necessary for training.
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -51,9 +54,9 @@ class CliffordKANLayer(torch.nn.Module):
         self.grid_max = grid_max
         self.ga = ga
         #self.csilu_type = csilu_type
-        self.use_norm = use_norm
-        # initialize Norm instance corresponding to self.use_norm
         # TODO implement batchnorm for Clifford space
+        #self.use_norm = use_norm
+        # initialize Norm instance corresponding to self.use_norm
         """
         if self.use_norm == Norms.LayerNorm:
             self.norm = Complex_LayerNorm()
@@ -78,8 +81,10 @@ class CliffordKANLayer(torch.nn.Module):
         # self.grid_centers has dim: [centers_per_dim ^ ga.dim, ga.dim] where each row lists one combination of coordinates for all dims
         # self.weights has dim: [input_dim, output_dim, ...] where ... is dim of self.grid_centers
         # so every connection can have different weights but centers for RBF are shared
-        # TODO: until now the weights and grid_centers are real-valued; how to convert a [125, 3] tensor to an element of GA with dim [125]?
-        # TODO: how to convert [2,3,125,3] to element of GA with dim [2,3,125] (input x output x num_centers_per_dimension ^ ga.dim)
+        # TODO: until now the weights and grid_centers are real-valued; how to convert a [8*8,2] = [64, 2] tensor to an element of GA with dim [64]?
+        # TODO: how to convert [2,3,64,2] to element of GA with dim [2,3,64] (input x output x num_centers_per_dimension ^ ga.dim)
+        #       similar to converting real and imaginary parts into one tensor with dtype=torch.complex64
+        #       should I convert? or just use torch_ga.multiply(...)? In which dimension does that take place? --> would be easiest to just use torch.einsum()
         print(self.weights.shape, self.grid_centers.shape)
         # TODO Csilu for Clifford
         """
@@ -151,7 +156,7 @@ class CliffordKAN(torch.nn.Module):
                  layers_hidden: List[int],
                  num_grids: int = 8,
                  rho=1,
-                 use_norm=Norms.BatchNorm,
+                 #use_norm=Norms.BatchNorm,
                  grid_mins = -2,
                  grid_maxs = 2,
                  csilu_type = "complex_weight"):
@@ -174,16 +179,16 @@ class CliffordKAN(torch.nn.Module):
         self.layers_hidden = layers_hidden  # width of hidden layers (including input and output layer)
         self.num_grids = num_grids
         self.rho = rho
-        self.use_norm = use_norm
+        #self.use_norm = use_norm
         self.csilu_type = csilu_type
         # convert csilu_type to list (each layer could get it's own CSiLU type)
-        if type(self.use_norm) != list:
-            self.use_norm = [self.use_norm] * (len(layers_hidden) - 1)
-        else:
-            assert len(self.use_norm) == len(self.layers_hidden)
+        #if type(self.use_norm) != list:
+        #    self.use_norm = [self.use_norm] * (len(layers_hidden) - 1)
+        #else:
+        #    assert len(self.use_norm) == len(self.layers_hidden)
         # lambdas to calculate if Layer i should have Normalization applied after it
         is_last_layer = lambda i: i >= len(self.layers_hidden) - 2
-        norm_to_use = lambda i: self.use_norm[i] if not is_last_layer(i) else Norms.NoNorm
+        norm_to_use = lambda i: self.use_norm[i] if not is_last_layer(i) else None#Norms.NoNorm
         # Array with Normalization schemes to use after every layer
         self.use_norm = [norm_to_use(i) for i in range(len(layers_hidden)-1)]
         # stack Layers into a ModuleList
@@ -193,18 +198,16 @@ class CliffordKAN(torch.nn.Module):
                                                       rho=self.rho) for i in range(len(layers_hidden) - 1)])
     def forward(self, x):
         # make sure x is batched
-        if len(x.shape) == 1:
+        if len(x.shape) == 1:  # TODO adapt this one to GA
             x = x.unsqueeze(1)
         # find mins over all samples within batch
         # x has shape Batch x Input-Dim and we want each component of x to be inside of our grid
-        #TODO: can we somehow access the components of an element from GA (like accessing real and imaginary parts in complex-numbers)
-        """
+        
         mins_per_channel = torch.minimum(torch.amin(x.real, dim=0), torch.amin(x.imag, dim=0))
         maxs_per_channel = torch.maximum(torch.amax(x.real, dim=0), torch.amax(x.imag, dim=0))
         # make sure first Layer's grid limits aren't overstepped. This would indicate a problem with dataset
         # normalization (which must be done before entering the data into the model!)
         assert (mins_per_channel >= self.layers[0].grid_min).all() and (maxs_per_channel <= self.layers[0].grid_max).all(), "Input data does not fall completely within the grid range of the first layer. Please normalize the data!"
-        """
         # feed data through the layers
         for layer in self.layers:
             x = layer(x)
@@ -215,8 +218,30 @@ class CliffordKAN(torch.nn.Module):
 if __name__ == "__main__":
     ga = torch_ga.GeometricAlgebra([1,-1])
     cliffKAN = CliffordKAN(ga=ga, layers_hidden=[1,1])
-    x = ga.from_tensor_with_kind(torch.tensor([1,-1.5]), kind="vector")
-    ga.print(x)
+    x = ga.from_tensor_with_kind(torch.tensor([[1,-1.5], [2,-1]]), kind="vector")
+    y = ga.from_tensor_with_kind(torch.tensor([[2.0,0],[-1,1]]), kind="vector")
+    x_mv = ga(x)
+    y_mv = ga(y)
+    print("x")
+    print(x)
+    print(x)
+    ga.print(x[0])
+    ga.print(x[1])
+    print("y")
+    print(y)
+    ga.print(y[0])
+    ga.print(y[1])
+    print("x*y")
+    print(x*y)  # TODO: this does element-wise multiplication, right? Is this what we want for weights * rbf_values?
+    ga.print((x*y)[0])
+    ga.print((x*y)[1])
+    # TODO: this doesnt seem to do the right thing? (1 - 1.5i) * (2 + 0i) should be (2 - 3i) right? acutally is just 2 + 0i
+    exit(0)
+    # TODO: what is a cayley?
+    #print(torch_ga.mv_multiply(x,y))
+    #print(torch_ga.mv_multiply_element_wise(x,y))
+    ga.print(x[0])
+    ga.print(x[1])
     print(ga.num_bases)
     exit(0)
     ga.print(cliffKAN(x))
