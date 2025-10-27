@@ -126,4 +126,13 @@ f(x) = x^2
 ```bash
 mamba env create -f env.yaml -n cliffordkan
 conda activate cliffordkan
+
+pip install -e. 
+
+```
+
+
+```bash
+conda activate cliffordkan
+python experiments/fit_formulas.py --task funcfit
 ```

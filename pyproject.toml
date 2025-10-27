@@ -1,0 +1,90 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cvkan"
+dynamic = ["version"]
+description = "Clifford KAN"
+readme = "README.md"
+authors = [
+    { name = "Francesco Alesiani", email = "francesco.alesiani@neclab.eu" },
+]
+license = { file = "LICENSE" }
+keywords = ["clifford", "KAN", "function"]
+
+# Classifiers help users find your project on PyPI
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+]
+
+# Specify the minimum Python version required
+requires-python = ">=3.9"
+
+# Core dependencies for your project
+dependencies = [
+    # Add your actual project dependencies here, e.g.,
+    # "jinja2>=3.1.2",
+    # "click",
+    "matplotlib",
+    "torch",
+    "icecream",
+    "scikit-learn",
+    "pandas",
+    "pyyaml",
+    "tqdm",
+    "pykan",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/cvkan" # Replace with your actual repo
+Documentation = "https://cvkan.readthedocs.io/"
+Issues = "https://github.com/yourusername/cvkan/issues"
+
+# Define any scripts/entry points for command-line execution
+[project.scripts]
+cvkan = "cvkan.__main__:main" # Assumes a package 'cvkan' with a main function
+
+# -----------------------------------------------------------------------------
+# Tool Configurations
+# -----------------------------------------------------------------------------
+
+# Configuration for Black (code formatter)
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | dist
+)/
+'''
+
+# Configuration for isort (import sorter)
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["cvkan"]
+sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
+
+# Configuration for Hatch (if you need specific build settings)
+[tool.hatch.version]
+path = "cvkan/__init__.py" # Where the version number is stored
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/tests",
+]
