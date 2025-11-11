@@ -171,7 +171,6 @@ class CliffordKAN(torch.nn.Module):
                                                       silu_type=self.silu_type) for i in range(len(layers_hidden) - 1)])
     def forward(self, x):
         # make sure x is batched
-        print("FORWARD", x.size())
         if len(x.shape) == 2:  # x might be [input-dim x num_dims] (i.e. a single clifford number)
             x = x.unsqueeze(1)
         # make sure first Layer's grid limits aren't overstepped. This would indicate a problem with dataset
@@ -179,7 +178,7 @@ class CliffordKAN(torch.nn.Module):
         assert (self.layers[0].grid_min <= torch.amin(x)).all() and (torch.amax(x) <= self.layers[0].grid_max).all(), "Input data does not fall completely within the grid range of the first layer. Please normalize the data!"
         # feed data through the layers
         for layer in self.layers:
-            print("forward call with input", x, "and size", x.size())
+            #print("forward call with input", x, "and size", x.size())
             x = layer(x)
         return x
     def to(self, device):
