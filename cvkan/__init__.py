@@ -4,7 +4,8 @@ from .models.wrapper.CVKANWrapper import CVKANWrapper
 from .utils.explain_kan import KANExplainer
 from .utils.plotting.plot_kan import KANPlot
 from .train.train_loop import train_kans
+from .models.CliffordKAN import CliffordKAN
 
-__all__ = [CVKAN, CVKANWrapper, KANExplainer, KANPlot, train_kans]
+__all__ = [CliffordKAN,CVKAN, CVKANWrapper, KANExplainer, KANPlot, train_kans]
 
 version="0.0.1"
