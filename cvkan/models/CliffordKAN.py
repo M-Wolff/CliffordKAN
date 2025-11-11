@@ -52,7 +52,7 @@ class CliffordKANLayer(torch.nn.Module):
         self.metric = metric
         self.algebra = CliffordAlgebra(metric)
         # coordinate dimension
-        self.num_dim = self.algebra.num_bases
+        self.num_dim = self.algebra.num_bases + 1
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_grids = num_grids
@@ -95,17 +95,17 @@ class CliffordKANLayer(torch.nn.Module):
         # apply RBF on x (centered around each grid point)
         # TODO discussion: this is again component-wise and does not utilize calculations in clifford space
         # x needs to be expanded to gain a grid dimension (is then [Batch x Input x self.num_dim x self.num_grids])
-        x = x.unsqueeze(-1).expand(x.shape + (self.num_grids))
+        x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
         result = torch.exp(-(torch.abs(x - self.grid)) ** 2 / self.rho)
         # i and o are input and output indices within layer layer_idx and layer_ix+1
         # d is dimension and g is grid
         # TODO: how to convert einstein summation to ga.geometric_product / ga.inner_product / ...?
-        result = torch.einsum("bidg,iodg->bo", result, self.weights)
+        result = torch.einsum("bidg,iodg->bod", result, self.weights)
         assert result.shape[1] == self.output_dim, f"Wrong Output Dimension! Got {result.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}]"
         # SiLU
         # TODO: how to convert einstein summation to ga.geometric_product / ga.inner_product / ...?
-        silu_value = torch.einsum("iod,bid->biod",self.silu_weight, self.silu(x))
-        silu_value = torch.einsum("biod,iod->bo", silu_value, self.silu_bias)
+        silu_value = torch.einsum("iod,bidg->biod",self.silu_weight, self.silu(x))
+        silu_value = torch.einsum("biod,iod->bod", silu_value, self.silu_bias)
         result = result + silu_value
         # potentially apply Normalization
         if self.use_norm is not None:
@@ -148,7 +148,7 @@ class CliffordKAN(torch.nn.Module):
         self.metric = metric
         self.algebra = CliffordAlgebra(metric)
         # coordinate dimension
-        self.num_dim = self.algebra.num_bases
+        self.num_dim = self.algebra.num_bases + 1
         self.layers_hidden = layers_hidden
         self.num_grids = num_grids
         self.rho = rho
@@ -171,6 +171,7 @@ class CliffordKAN(torch.nn.Module):
                                                       silu_type=self.silu_type) for i in range(len(layers_hidden) - 1)])
     def forward(self, x):
         # make sure x is batched
+        print("FORWARD", x.size())
         if len(x.shape) == 2:  # x might be [input-dim x num_dims] (i.e. a single clifford number)
             x = x.unsqueeze(1)
         # make sure first Layer's grid limits aren't overstepped. This would indicate a problem with dataset
@@ -178,7 +179,7 @@ class CliffordKAN(torch.nn.Module):
         assert (self.layers[0].grid_min <= torch.amin(x)).all() and (torch.amax(x) <= self.layers[0].grid_max).all(), "Input data does not fall completely within the grid range of the first layer. Please normalize the data!"
         # feed data through the layers
         for layer in self.layers:
-            print("forward call with input", x)
+            print("forward call with input", x, "and size", x.size())
             x = layer(x)
         return x
     def to(self, device):
