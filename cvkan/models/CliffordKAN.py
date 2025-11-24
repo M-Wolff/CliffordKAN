@@ -1,3 +1,8 @@
+# TODO: Add training script / testing (complex values)
+# TODO compare for complex-values the grid nd with 2 x grid and grid x grid
+#       maybe even sth fancier (limit to 3D / 2D with PGA/CGA) PGA projected GA (computer graphics) , CGA = conformal GA (model circels, spheres)
+# in 3D: metric=[3,0,0] and PGA [3,0,1] and CGA in 3d: [4,1,0]
+# in 2D: [2,0,0],  PGA [2,0,1], CGA [3,1,0]
 """
 File: CliffordKAN.py
 Author: Matthias Wolff, Francesco Alesiani, Xiaoyi Jiang
@@ -5,7 +10,9 @@ Description: Clifford-KAN Model definition
 """
 from typing import List
 import torch
+from torch_ga import GeometricAlgebra
 from torch_ga.clifford import CliffordAlgebra
+from icecream import ic
 
 class Norms:
     """Enum for Normalization Types"""
@@ -16,22 +23,12 @@ class Norms:
     BatchNormComponentWise = "batchnorm_comp-wise"  # apply normal BN for each component
     NoNorm = None
 
-def create_grid2d(grid_min, grid_max, num_grids):
-    # create grid points 2D array
-    real = torch.linspace(grid_min, grid_max, num_grids)
-    real = real.unsqueeze(1).expand(num_grids, num_grids)
-
-    imag = torch.linspace(grid_min, grid_max, num_grids)
-    imag = imag.unsqueeze(0).expand(num_grids, num_grids)
-    # make it complex-valued from real and imaginary parts
-    grid = torch.complex(real, imag)
-    return grid
-
-
 def create_gridnd(num_dim, grid_min, grid_max, num_grids):
     # create grid points n-D array
-    # TODO discussion: for complex-valued we have num_dim=2 and thus [2 x num_grids] as grid shape. In CVKAN we had [num_grids x num_grids] but this probably doesn't scale well for clifford kan and higher dims? So now we treat each component independently.
-    grid = torch.linspace(grid_min, grid_max, num_grids).unsqueeze(0).expand(num_dim, num_grids)
+    # for complex-valued we have num_dim=2 and thus [2 x num_grids] as grid shape. In CVKAN we had [num_grids x num_grids] but this probably doesn't scale well for clifford kan and higher dims? So now we treat each component independently.
+    # create grid (linspace from grid_min to grid_max consisting of num_grids grid points)
+    # then add one more dimension (not just a view!) to have a grid per dimension of CA / GA
+    grid = torch.linspace(grid_min, grid_max, num_grids).unsqueeze(-1).repeat(1, num_dim)
     return grid
     
 
@@ -50,7 +47,7 @@ class CliffordKANLayer(torch.nn.Module):
         """
         super().__init__()
         self.metric = metric
-        self.algebra = CliffordAlgebra(metric)
+        self.algebra = GeometricAlgebra(metric)
         # coordinate dimension
         self.num_dim = self.algebra.num_bases + 1
         self.input_dim = input_dim
@@ -77,7 +74,7 @@ class CliffordKANLayer(torch.nn.Module):
         
         self.rho = rho
         # weights for each RBF centered around the grid points
-        self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, self.num_dim, num_grids)), requires_grad=True)
+        self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids,self.num_dim)), requires_grad=True)
         # initialize CSiLU weight to use based on selected csilu_type
         if self.silu_type == "componentwise":
             self.silu_weight = torch.nn.Parameter(torch.ones(size=(self.input_dim, self.output_dim, self.num_dim), dtype=torch.float32), requires_grad=True)
@@ -93,19 +90,20 @@ class CliffordKANLayer(torch.nn.Module):
         assert len(x.shape) == 3 and x.shape[1] == self.input_dim and x.shape[2] == self.num_dim, f"Wrong Input Dimension! Got {x.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}] and num_dims = {self.num_dim}"
         # grid is [num_dim x num_grids]
         # apply RBF on x (centered around each grid point)
-        # TODO discussion: this is again component-wise and does not utilize calculations in clifford space
-        # x needs to be expanded to gain a grid dimension (is then [Batch x Input x self.num_dim x self.num_grids])
+        # x needs to be expanded to gain a grid dimension (is then [Batch x Input x self.num_grids  x self.num_dim])
         x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
+        x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
         result = torch.exp(-(torch.abs(x - self.grid)) ** 2 / self.rho)
         # i and o are input and output indices within layer layer_idx and layer_ix+1
         # d is dimension and g is grid
-        # TODO: how to convert einstein summation to ga.geometric_product / ga.inner_product / ...?
-        result = torch.einsum("bidg,iodg->bod", result, self.weights)
+        result = torch.einsum("bigx,iogy,xyz->boz", result, self.weights, self.algebra.cayley)
+        # result = torch.einsum("bidg,iodg->bod", result, self.weights)
         assert result.shape[1] == self.output_dim, f"Wrong Output Dimension! Got {result.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}]"
         # SiLU
-        # TODO: how to convert einstein summation to ga.geometric_product / ga.inner_product / ...?
-        silu_value = torch.einsum("iod,bidg->biod",self.silu_weight, self.silu(x))
-        silu_value = torch.einsum("biod,iod->bod", silu_value, self.silu_bias)
+        silu_value = torch.einsum("iox,bigy,xyz->bioz", self.silu_weight, self.silu(x), self.algebra.cayley)
+        #silu_value = torch.einsum("iod,bidg->biod",self.silu_weight, self.silu(x))
+        silu_value = torch.einsum("biox,ioy,xyz->boz",silu_value, self.silu_bias, self.algebra.cayley)
+        #silu_value = torch.einsum("biod,iod->bod", silu_value, self.silu_bias)
         result = result + silu_value
         # potentially apply Normalization
         if self.use_norm is not None:
