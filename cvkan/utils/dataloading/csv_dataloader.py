@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 
 
 class CSVDataset(torch.utils.data.Dataset):
-    def __init__(self,csv_file,input_vars,output_vars, categorical_vars, train_test="70:30", shuffle=True):
+    def __init__(self,csv_file,input_vars: list,output_vars: list, categorical_vars, train_test="70:30", shuffle=True):
         """
         :param csv_file: file path to CSV file OR already loaded pandas dataframe OR dictionary
         :param input_vars: names of input variables (list)

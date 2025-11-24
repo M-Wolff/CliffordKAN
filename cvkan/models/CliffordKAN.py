@@ -13,16 +13,8 @@ import torch
 from torch_ga import GeometricAlgebra
 from torch_ga.clifford import CliffordAlgebra
 from icecream import ic
-from ..utils.norm_functions import ComponentwiseBatchNorm1d
+from ..utils.norm_functions import ComponentwiseBatchNorm1d, Norms
 
-class Norms:
-    """Enum for Normalization Types"""
-    LayerNorm = "layernorm"
-    BatchNorm = "batchnorm"  # BN_{\mathbb{C}}
-    BatchNormNaiv = "batchnormnaiv"  # BN_{\mathbb{R}^2}
-    BatchNormVar = "batchnormvar"  # BN_{\mathbb{V}} using variance
-    BatchNormComponentWise = "batchnorm_comp-wise"  # apply normal BN for each component
-    NoNorm = None
 
 def create_gridnd(num_dim, grid_min, grid_max, num_grids):
     # create grid points n-D array
@@ -49,8 +41,9 @@ class CliffordKANLayer(torch.nn.Module):
         super().__init__()
         self.metric = metric
         self.algebra = GeometricAlgebra(metric)
-        # coordinate dimension
-        self.num_dim = self.algebra.num_bases + 1
+        self.cayley = self.algebra.cayley  # we need a copy to move cayley to gpu/cpu accordingly in to(...) method
+        # num_dim is 2^num_bases
+        self.num_dim = 1 << self.algebra.num_bases
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_grids = num_grids
@@ -97,13 +90,13 @@ class CliffordKANLayer(torch.nn.Module):
         result = torch.exp(-(torch.abs(x - self.grid)) ** 2 / self.rho)
         # i and o are input and output indices within layer layer_idx and layer_ix+1
         # d is dimension and g is grid
-        result = torch.einsum("bigx,iogy,xyz->boz", result, self.weights, self.algebra.cayley)
+        result = torch.einsum("bigx,iogy,xyz->boz", result, self.weights, self.cayley)
         # result = torch.einsum("bidg,iodg->bod", result, self.weights)
         assert result.shape[1] == self.output_dim, f"Wrong Output Dimension! Got {result.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}]"
         # SiLU
-        silu_value = torch.einsum("iox,bigy,xyz->bioz", self.silu_weight, self.silu(x), self.algebra.cayley)
+        silu_value = torch.einsum("iox,bigy,xyz->bioz", self.silu_weight, self.silu(x), self.cayley)
         #silu_value = torch.einsum("iod,bidg->biod",self.silu_weight, self.silu(x))
-        silu_value = torch.einsum("biox,ioy,xyz->boz",silu_value, self.silu_bias, self.algebra.cayley)
+        silu_value = torch.einsum("biox,ioy,xyz->boz",silu_value, self.silu_bias, self.cayley)
         #silu_value = torch.einsum("biod,iod->bod", silu_value, self.silu_bias)
         result = result + silu_value
         # potentially apply Normalization
@@ -118,6 +111,7 @@ class CliffordKANLayer(torch.nn.Module):
         if self.use_norm is not None:  # and Norm as well
             self.norm = self.norm.to(device)
         self.silu = self.silu.to(device)
+        self.cayley = self.cayley.to(device)
 class CliffordKAN(torch.nn.Module):
     def __init__(self,
                  metric: list[float],

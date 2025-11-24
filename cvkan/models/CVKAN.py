@@ -11,15 +11,7 @@ from .functions.CV_LayerNorm import Complex_LayerNorm, Complex_BatchNorm, Comple
     Complex_BatchNorm_var
 
 from .functions.ComplexSilu import complex_silu_complexweight, complex_silu_realweights
-
-class Norms:
-    """Enum for Normalization Types"""
-    LayerNorm = "layernorm"
-    BatchNorm = "batchnorm"  # BN_{\mathbb{C}}
-    BatchNormNaiv = "batchnormnaiv"  # BN_{\mathbb{R}^2}
-    BatchNormVar = "batchnormvar"  # BN_{\mathbb{V}} using variance
-    NoNorm = None
-
+from ..utils.norm_functions import Norms
 
 class CVKANLayer(torch.nn.Module):
     def __init__(self, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNorm, csilu_type="complex_weight"):

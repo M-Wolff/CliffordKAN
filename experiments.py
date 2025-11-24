@@ -1,8 +1,8 @@
 import torch
-from torch_ga.clifford import GeometricAlgebra, CliffordAlgebra
+from torch_ga.clifford import GeometricAlgebra, CliffordAlgebra 
 import torch_ga
 
-from cvkan import CliffordKAN
+from cvkan import CliffordKAN, Norms
 
 metric = [-1.0]
 ga = GeometricAlgebra(metric=metric)
@@ -16,6 +16,6 @@ b = torch.tensor([[2,0],[-1,1.]])
 #print(ca.num_bases)
 #print(ga.num_bases)
 
-cliffkan = CliffordKAN(metric=[-1], layers_hidden=[1,5,1], use_norm=None)
+cliffkan = CliffordKAN(metric=[-1], layers_hidden=[1,5,1], use_norm=Norms.BatchNormComponentWise)
 print(cliffkan(a))
 

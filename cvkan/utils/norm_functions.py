@@ -1,4 +1,14 @@
 import torch
+
+class Norms:
+    """Enum for Normalization Types"""
+    LayerNorm = "layernorm"
+    BatchNorm = "batchnorm"  # BN_{\mathbb{C}}
+    BatchNormNaiv = "batchnormnaiv"  # BN_{\mathbb{R}^2}
+    BatchNormVar = "batchnormvar"  # BN_{\mathbb{V}} using variance
+    BatchNormComponentWise = "batchnorm_comp-wise"  # apply normal BN for each component
+    NoNorm = None
+
 class ComponentwiseBatchNorm1d(torch.nn.Module):
     def __init__(self, num_features):
         super().__init__()

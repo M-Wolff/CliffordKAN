@@ -10,13 +10,14 @@ import torch
 from kan import create_dataset
 
 from cvkan.experiments.run_crossval import run_crossval
-from cvkan.models.CVKAN import Norms
 from cvkan.models.FastKAN import FastKAN
 from cvkan.models.wrapper.CVKANWrapper import CVKANWrapper
 from cvkan.models.wrapper.PyKANWrapper import PyKANWrapper
 from cvkan.utils.dataloading.create_complex_dataset import create_complex_dataset
 from cvkan.utils.dataloading.csv_dataloader import CSVDataset
 from cvkan.utils.loss_functions import MSE, MAE
+from cvkan.utils.norm_functions import Norms
+from cvkan.models.CliffordKAN import CliffordKAN
 
 mse_loss = MSE()
 mae_loss = MAE()
@@ -24,6 +25,48 @@ mae_loss = MAE()
 loss_fns = dict()
 loss_fns["mse"] = mse_loss
 loss_fns["mae"] = mae_loss
+
+def convert_complex_dataset_to_clifford(dataset: CSVDataset):
+    """Converts a complex dataset to a dataset in clifford space"""
+    if dataset.categorical_vars:
+        raise NotImplementedError("complex dataset can't contain categorical vars!")
+    num_vars_complex = len(dataset.input_varnames)
+    num_outputs_complex = len(dataset.output_varnames)
+    num_samples_train, num_samples_test = dataset.get_train_test_size()
+    num_dims = 2  # complex-valued has 2 dimensions
+
+    train_input = torch.zeros((num_samples_train, num_vars_complex, num_dims), dtype=torch.float32)
+    test_input = torch.zeros((num_samples_test, num_vars_complex, num_dims), dtype=torch.float32)
+    train_label = torch.zeros((num_samples_train, num_vars_complex, num_dims), dtype=torch.float32)
+    test_label = torch.zeros((num_samples_test, num_vars_complex, num_dims), dtype=torch.float32)
+
+    for in_feature in range(num_vars_complex):
+        train_input[:, in_feature,0] = dataset.data["train_input"][:, in_feature].real
+        train_input[:, in_feature,1] = dataset.data["train_input"][:, in_feature].imag
+
+        if num_samples_test > 0:
+            test_input[:, in_feature, 0] = dataset.data["test_input"][:, in_feature].real
+            test_input[:, in_feature, 1] = dataset.data["test_input"][:, in_feature].imag
+
+    for out_feature in range(num_outputs_complex):
+        train_label[:, out_feature, 0] = dataset.data["train_label"][:, out_feature].real
+        train_label[:, out_feature, 1] = dataset.data["train_label"][:, out_feature].imag
+
+        if num_samples_test > 0:
+            test_label[:, out_feature, 0] = dataset.data["test_label"][:, out_feature].real
+            test_label[:, out_feature, 1] = dataset.data["test_label"][:, out_feature].imag
+
+    # build a dictionary out of the now clifford-valued datapoints
+    realdata_dict = dict()
+    realdata_dict['train_input'] = train_input
+    realdata_dict['train_label'] = train_label
+    realdata_dict['test_input'] = test_input
+    realdata_dict['test_label'] = test_label
+
+    # create a CVDataset object from this dict
+    dataset_clifford = CSVDataset(realdata_dict, input_vars=dataset.input_varnames, output_vars=dataset.output_varnames, categorical_vars=[])
+    return dataset_clifford
+
 
 def convert_complex_dataset_to_real(dataset: CSVDataset):
     """Converts a complex dataset to a real-valued dataset by doubling input and output dimension (one real number for
@@ -111,7 +154,7 @@ def run_experiments_physics(run_dataset, run_model):
                                    output_vars=["U_{rl}.real", "U_{rl}.imag"], categorical_vars=[])
 
     # check which model and dataset to run
-    run_models = [False] * 3
+    run_models = [False] * 4
     if run_model == "all":
         run_models = [True] * 3
     elif run_model == "pykan":
@@ -120,6 +163,8 @@ def run_experiments_physics(run_dataset, run_model):
         run_models[1] = True
     elif run_model == "cvkan":
         run_models[2] = True
+    elif run_model == "cliffkan":
+        run_models[3] = True
 
     run_datasets = [False] * 2
     if run_dataset == "all":
@@ -192,7 +237,7 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
     elif run_dataset == "sinus":
         run_datasets[3] = True
 
-    run_models = [False] * 3
+    run_models = [False] * 4
     if run_model == "all":
         run_models = [True] * 3
     elif run_model == "pykan":
@@ -201,12 +246,15 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
         run_models[1] = True
     elif run_model == "cvkan":
         run_models[2] = True
+    elif run_model == "cliffkan":
+        run_models[3] = True
 
     # only generate train samples and no test samples because run_crossval later splits them into k folds
 
     dataset_sq_c = create_complex_dataset(sq, ranges=[-2,2], n_var=1, train_num=5000, test_num=0)
     dataset_sq_c = CSVDataset(dataset_sq_c, input_vars=["z"], output_vars=["z^2"], categorical_vars=[])
     dataset_sq_r = convert_complex_dataset_to_real(dataset_sq_c)
+    dataset_sq_cliff = convert_complex_dataset_to_clifford(dataset_sq_c)
 
     dataset_sqsq_c = create_complex_dataset(sqsq, ranges=[-2,2], n_var=2, train_num=5000, test_num=0)
     dataset_sqsq_c = CSVDataset(dataset_sqsq_c, input_vars=["z_1", "z_2"], output_vars=["(z_1^2 + z_2^2)^2"], categorical_vars=[])
@@ -248,6 +296,12 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
 
             cvkan = CVKANWrapper(layers_hidden=[1,2, 1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
             run_crossval(cvkan, dataset_sq_c, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
+                         batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
+        if run_model[3]:
+            print("Ja")
+            # TODO metric should not be hardcoded here for later experiments
+            cliffkan = CliffordKAN(layers_hidden=[1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns,
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
     # Square Square Dataset = (z_1**2 + z_2**2)**2
@@ -343,9 +397,9 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', nargs='?', default="all", type=str)
-    parser.add_argument('--model', nargs='?', default="all", type=str)
-    parser.add_argument("--task", type=str, default="funcfit") #, required=True)
+    parser.add_argument('--dataset', nargs='?', default="all", type=str, help="Dataset to run on. Can be {holography,circuit,square,squaresquare,mult,sinus}")
+    parser.add_argument('--model', nargs='?', default="all", type=str, help="Model to run experiment on. Can be {pykan,fastkan,cvkan,cliffkan,all}")
+    parser.add_argument("--task", type=str, default="funcfit", help="Task to run on. Can be one of {funcfit, physics}") #, required=True)
 
     args = parser.parse_args()
     print("Running Function Fitting Eperiments for Dataset ", args.dataset, " and Model ", args.model, " and Task ", args.task)
