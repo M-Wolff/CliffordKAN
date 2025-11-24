@@ -13,6 +13,7 @@ import torch
 from torch_ga import GeometricAlgebra
 from torch_ga.clifford import CliffordAlgebra
 from icecream import ic
+from ..utils.norm_functions import ComponentwiseBatchNorm1d
 
 class Norms:
     """Enum for Normalization Types"""
@@ -60,7 +61,7 @@ class CliffordKANLayer(torch.nn.Module):
         # initialize Norm instance corresponding to self.use_norm
         if self.use_norm == Norms.BatchNormComponentWise:
             # component-wise BatchNorm
-            self.norm = torch.nn.BatchNorm1d(num_features=self.num_dim)
+            self.norm = ComponentwiseBatchNorm1d(num_features=self.num_dim)
         elif self.use_norm == Norms.NoNorm:
             self.norm = lambda x: x  # no-op
         else:
