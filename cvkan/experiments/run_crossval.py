@@ -16,6 +16,7 @@ from ..train.train_loop import train_kans
 from ..utils.dataloading.crossval_splitter import split_crossval
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.misc import get_num_parameters
+from ..models.CliffordKAN import CliffordKAN
 
 
 def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_backprop, loss_fns, batch_size, device=torch.device("cuda"), logging_interval=100, add_softmax_lastlayer=False, epochs=500, convert_model_output_to_real=True, k=5):
@@ -65,6 +66,7 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["num_trainable_params"] = get_num_parameters(model)
     results["zsilu_type"] = model.csilu_type if hasattr(model, "csilu_type") else None
     results["start_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    results["cliffkan_use_full_grid"] = model.use_full_grid if isinstance(model, CliffordKAN) else None
 
     # iterate over the k folds
     for i, d in enumerate(datasets):

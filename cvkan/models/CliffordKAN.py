@@ -44,7 +44,7 @@ def create_grid2d_full(grid_min, grid_max, num_grids):
     
 
 class CliffordKANLayer(torch.nn.Module):
-    def __init__(self, metric: list[float], input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", use_full_grid=True):        
+    def __init__(self, metric: list[float], input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", use_full_grid=True):
         """
         :param metric: the Geometric Algebra metric (list[float])
         :param input_dim: input dimension size of Layer (Layer Width)
@@ -165,7 +165,8 @@ class CliffordKAN(torch.nn.Module):
                  use_norm=Norms.BatchNormComponentWise,
                  grid_mins = -2,
                  grid_maxs = 2,
-                 silu_type = "componentwise"):
+                 silu_type = "componentwise",
+                 use_full_grid=True):
         """
         :param metric: the Geometric Algebra metric (list[float])
         :param layers_hidden: List with Layer Sizes (i.e. [1,5,3,1] for a 1x5x3x1 CVKAN)
@@ -174,7 +175,8 @@ class CliffordKAN(torch.nn.Module):
         :param use_norm: which Normalization scheme to use. Normalization is applied AFTER every layer except the last
         :param grid_mins: left limit of grid
         :param grid_maxs: right limit of grid
-        :param csilu_type: type of CSiLU to use ('complex_weight' or 'real_weights')
+        :param silu_type: type of SiLU to use (i.e. componentwise, ...)
+        :param use_full_grid: whether to use full grid (i.e. [8^2]) or not (i.e. [8 x 2])
         """
         super().__init__()
         # convert grid limits to list if not already is list (limits for each layer independently)
@@ -191,6 +193,7 @@ class CliffordKAN(torch.nn.Module):
         self.rho = rho
         self.use_norm = use_norm
         self.silu_type = silu_type
+        self.use_full_grid = use_full_grid
         # convert silu_type to list (each layer could get it's own SiLU type)
         if type(self.use_norm) != list:
             self.use_norm = [self.use_norm] * (len(layers_hidden) - 1)
@@ -205,7 +208,7 @@ class CliffordKAN(torch.nn.Module):
         self.layers = torch.nn.ModuleList([CliffordKANLayer(metric=self.metric, input_dim=layers_hidden[i], output_dim=layers_hidden[i+1],
                                                       num_grids=num_grids, grid_min=grid_mins[i], grid_max=grid_maxs[i],
                                                       rho=self.rho, use_norm=self.use_norm[i],
-                                                      silu_type=self.silu_type) for i in range(len(layers_hidden) - 1)])
+                                                      silu_type=self.silu_type, use_full_grid=self.use_full_grid) for i in range(len(layers_hidden) - 1)])
     def forward(self, x):
         # make sure x is batched
         if len(x.shape) == 2:  # x might be [input-dim x num_dims] (i.e. a single clifford number)
