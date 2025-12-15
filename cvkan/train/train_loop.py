@@ -6,12 +6,10 @@ Description: Main loop for training all kinds of KANs on any dataset with arbitr
 import torch
 from torch.utils.data import DataLoader
 
-from ..models.wrapper import PyKANWrapper, CVKANWrapper
-from ..models import CliffordKAN
+from ..models.wrapper import PyKANWrapper 
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
 from ..utils.misc import get_num_parameters
-from icecream import ic
 
 def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=torch.device("cuda"), epochs=5000,
                batch_size=1000, kan_explainer=None, logging_interval=50, add_softmax_lastlayer=False, last_layer_output_real=True, sparsify=False):
