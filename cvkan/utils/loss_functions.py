@@ -53,10 +53,15 @@ class MSE(torch.nn.Module):
     """
     MSE as a torch module
     """
-    def __init__(self):
+    def __init__(self, ga=None):
         super().__init__()
+        self.ga = ga
     def forward(self, pred, label):
-        return torch.mean((torch.abs(pred - label)) ** 2)
+        if self.ga is None:
+            return torch.mean((torch.abs(pred - label)) ** 2)
+        else:
+            return torch.mean((self.ga.norm(pred - label) **2))
+
 
 
 class MAE(torch.nn.Module):
