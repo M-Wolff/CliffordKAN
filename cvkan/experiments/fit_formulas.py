@@ -134,6 +134,7 @@ def run_experiments_physics(run_dataset, run_model):
                                       categorical_vars=[])
     # create real-valued holography dataset from complex one
     dataset_holography_r = convert_complex_dataset_to_real(dataset_holography_c)
+    dataset_holography_cliff = convert_complex_dataset_to_clifford(dataset_holography_c)
 
     # circuit dataset formula (complex and real separately, as most variables are not complex to begin with so we can't
     # easily convert complex dataset to real one)
@@ -153,6 +154,7 @@ def run_experiments_physics(run_dataset, run_model):
     dataset_circuit_r = create_dataset(circuit_real_inputs, ranges=[-2, 2], n_var=7, train_num=_num_samples, test_num=0)
     dataset_circuit_r = CSVDataset(dataset_circuit_r, input_vars=["U_g.real","U_g.imag", "R_g", "R_l", "w", "L", "C"],
                                    output_vars=["U_{rl}.real", "U_{rl}.imag"], categorical_vars=[])
+    dataset_circuit_cliff = convert_complex_dataset_to_clifford(dataset_circuit_c)
 
     # check which model and dataset to run
     run_models = [False] * 4
@@ -195,6 +197,12 @@ def run_experiments_physics(run_dataset, run_model):
                              loss_fns=loss_fns,
                              batch_size=10000, add_softmax_lastlayer=False, epochs=1000,
                              convert_model_output_to_real=False)
+            if run_models[3]:
+                # TODO metric should not be hardcoded here for later experiments
+                cliffkan = CliffordKAN(layers_hidden=arch, metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+                loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+                loss_fn_backprop = loss_fns["mse"]
+                run_crossval(cliffkan, dataset_holography_cliff, dataset_name="ph_holo_cliff", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
     if run_datasets[1]:  # circuit
         for arch in [[7,1,2], [7,5,2], [7,10,2], [7,10,5,3,2]]:
             if run_models[0]:
@@ -215,6 +223,12 @@ def run_experiments_physics(run_dataset, run_model):
                              loss_fns=loss_fns,
                              batch_size=10000, add_softmax_lastlayer=False, epochs=1000,
                              convert_model_output_to_real=False)
+            if run_models[3]:
+                # TODO metric should not be hardcoded here for later experiments
+                cliffkan = CliffordKAN(layers_hidden=arch, metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+                loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+                loss_fn_backprop = loss_fns["mse"]
+                run_crossval(cliffkan, dataset_circuit_cliff, dataset_name="ph_circuit_cliff", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
 
 
