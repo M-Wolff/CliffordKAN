@@ -6,11 +6,12 @@ Description: Main loop for training all kinds of KANs on any dataset with arbitr
 import torch
 from torch.utils.data import DataLoader
 
-from ..models.wrapper import PyKANWrapper
+from ..models.wrapper import PyKANWrapper, CVKANWrapper
+from ..models import CliffordKAN
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
 from ..utils.misc import get_num_parameters
-
+from icecream import ic
 
 def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=torch.device("cuda"), epochs=5000,
                batch_size=1000, kan_explainer=None, logging_interval=50, add_softmax_lastlayer=False, last_layer_output_real=True, sparsify=False):
@@ -72,6 +73,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
 
     # train loop
+    epochs=1000
     for epoch in range(epochs):
         # evaluate without grads
         with torch.no_grad():
@@ -102,6 +104,24 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                     sparsity_regularization += 1*(kan_explainer.get_edge_relevance(k).abs()).sum()
                 train_loss = train_loss + sparsity_regularization
             train_loss.backward()
+            """ DEBUGGING
+            if batch == 0 and epoch % 100 == 0:  # TODO remove this
+                ic(X[0:10,:])
+                ic(train_predictions[0:10,:])
+                ic(y[0:10, :])
+                try:
+                    ic(model.layers[0].realweights.grad)
+                    ic(model.layers[0].complexweights.grad)
+                except Exception as e:
+                    print("fail1", e)
+                    pass
+                try:
+                    ic(model.__dict__)
+                    ic(model.layers[0].weights.grad)
+                except Exception as e:
+                    print("fail2", e)
+                    pass
+                """
             optimizer.step()
             optimizer.zero_grad()
         scheduler.step()

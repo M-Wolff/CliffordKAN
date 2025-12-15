@@ -58,6 +58,9 @@ class CVKANLayer(torch.nn.Module):
         self.grid = torch.nn.Parameter(grid, requires_grad=False)
         self.rho = rho
         # weights for each RBF centered around the grid points
+        #self.dummyweights = ic(torch.randn(size=(input_dim, output_dim, num_grids, num_grids, 2)))
+        #self.realweights = torch.nn.Parameter(self.dummyweights[:,:,:,:,0], requires_grad=True)
+        #self.complexweights = torch.nn.Parameter(self.dummyweights[:,:,:,:,1], requires_grad=True)
         self.realweights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids, num_grids)), requires_grad=True)
         self.complexweights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids, num_grids)), requires_grad=True)
         # initialize CSiLU weight to use based on selected csilu_type
