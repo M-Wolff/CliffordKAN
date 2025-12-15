@@ -18,6 +18,7 @@ from cvkan.utils.dataloading.csv_dataloader import CSVDataset
 from cvkan.utils.loss_functions import MSE, MAE
 from cvkan.utils.norm_functions import Norms
 from cvkan.models.CliffordKAN import CliffordKAN
+from icecream import ic
 
 mse_loss = MSE()
 mae_loss = MAE()
@@ -37,8 +38,8 @@ def convert_complex_dataset_to_clifford(dataset: CSVDataset):
 
     train_input = torch.zeros((num_samples_train, num_vars_complex, num_dims), dtype=torch.float32)
     test_input = torch.zeros((num_samples_test, num_vars_complex, num_dims), dtype=torch.float32)
-    train_label = torch.zeros((num_samples_train, num_vars_complex, num_dims), dtype=torch.float32)
-    test_label = torch.zeros((num_samples_test, num_vars_complex, num_dims), dtype=torch.float32)
+    train_label = torch.zeros((num_samples_train, num_outputs_complex, num_dims), dtype=torch.float32)
+    test_label = torch.zeros((num_samples_test, num_outputs_complex, num_dims), dtype=torch.float32)
 
     for in_feature in range(num_vars_complex):
         train_input[:, in_feature,0] = dataset.data["train_input"][:, in_feature].real
@@ -225,6 +226,7 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
     sqsq = lambda x: ((x[:, [0]]) ** 2 + x[:, [1]] ** 2) ** 2
     mult = lambda x: (x[:, [0]]) * x[:, [1]]
     sinus = lambda x: torch.sin(x[:,[0]])
+
     run_datasets = [False] * 4
     if run_dataset == "all":
         run_datasets = [True] * 4
@@ -259,15 +261,18 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
     dataset_sqsq_c = create_complex_dataset(sqsq, ranges=[-2,2], n_var=2, train_num=5000, test_num=0)
     dataset_sqsq_c = CSVDataset(dataset_sqsq_c, input_vars=["z_1", "z_2"], output_vars=["(z_1^2 + z_2^2)^2"], categorical_vars=[])
     dataset_sqsq_r = convert_complex_dataset_to_real(dataset_sqsq_c)
+    dataset_sqsq_cliff = convert_complex_dataset_to_clifford(dataset_sqsq_c)
 
     dataset_mult_c = create_complex_dataset(mult, ranges=[-2, 2], n_var=2, train_num=5000, test_num=0)
     dataset_mult_c = CSVDataset(dataset_mult_c, input_vars=["z_1", "z_2"], output_vars=["z_1 * z_2"],
                             categorical_vars=[])
     dataset_mult_r = convert_complex_dataset_to_real(dataset_mult_c)
+    dataset_mult_cliff = convert_complex_dataset_to_clifford(dataset_mult_c)
 
     dataset_sin_c = create_complex_dataset(sinus, ranges=[-2,2], n_var=1, train_num=5000, test_num=0)
     dataset_sin_c = CSVDataset(dataset_sin_c, input_vars=["z"], output_vars=["sin(z)"], categorical_vars=[])
     dataset_sin_r = convert_complex_dataset_to_real(dataset_sin_c)
+    dataset_sin_cliff = convert_complex_dataset_to_clifford(dataset_sin_c)
 
     # Square Dataset = z**2
     if run_datasets[0]:
@@ -297,13 +302,18 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
             cvkan = CVKANWrapper(layers_hidden=[1,2, 1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
             run_crossval(cvkan, dataset_sq_c, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
-        if run_model[3]:
-            print("Ja")
+        if run_models[3]:
             # TODO metric should not be hardcoded here for later experiments
             cliffkan = CliffordKAN(layers_hidden=[1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
-            run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns,
-                         batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
+
+            cliffkan = CliffordKAN(layers_hidden=[1,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
     # Square Square Dataset = (z_1**2 + z_2**2)**2
     if run_datasets[1]:
         if run_models[0]:
@@ -332,6 +342,17 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
             cvkan = CVKANWrapper(layers_hidden=[2, 4, 2, 1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
             run_crossval(cvkan, dataset_sqsq_c, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
+        if run_models[3]:
+            # TODO metric should not be hardcoded here for later experiments
+            cliffkan = CliffordKAN(layers_hidden=[2,1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sqsq_cliff, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
+
+            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sqsq_cliff, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
     # Mult Dataset = z_1 * z_2
     if run_datasets[2]:
@@ -362,6 +383,17 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
             cvkan = CVKANWrapper(layers_hidden=[2, 4, 2, 1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
             run_crossval(cvkan, dataset_mult_c, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
+        if run_models[3]:
+            # TODO metric should not be hardcoded here for later experiments
+            cliffkan = CliffordKAN(layers_hidden=[2,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_mult_cliff, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
+
+            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_mult_cliff, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
     # sin Dataset = sin(z)
     if run_datasets[3]:
@@ -392,7 +424,17 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all"):
             cvkan = CVKANWrapper(layers_hidden=[1,2, 1], num_grids=8, rho=1, use_norm=Norms.BatchNorm)
             run_crossval(cvkan, dataset_sin_c, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
+        if run_models[3]:
+            # TODO metric should not be hardcoded here for later experiments
+            cliffkan = CliffordKAN(layers_hidden=[1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sin_cliff, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
+            cliffkan = CliffordKAN(layers_hidden=[1,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise)
+            loss_fns["mse"] = MSE(ga=cliffkan.algebra)
+            loss_fn_backprop = loss_fns["mse"]
+            run_crossval(cliffkan, dataset_sin_cliff, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False, device="cpu")
 
 
 if __name__ == "__main__":
