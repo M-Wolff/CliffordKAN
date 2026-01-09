@@ -10,6 +10,9 @@ import sklearn
 import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
+from icecream import ic
+
+from cvkan.models.CliffordKAN import CliffordKAN
 
 def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_label, add_softmax_lastlayer):
     """
@@ -38,11 +41,15 @@ def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_labe
         current_train_preds = train_predictions
         current_test_preds = test_predictions
         # if loss function is CE, accuracy, F1 or precision and model output is complex
-        if loss_fn_name in ["cross_entropy", "accuracy", "f1", "precision"] and train_predictions.dtype == torch.complex64:
-            # only use real parts
-            current_train_preds = train_predictions.real
-            current_test_preds = test_predictions.real
-            # if softmax should be applied (and loss function is not CE; CE requires raw logits)
+        if loss_fn_name in ["cross_entropy", "accuracy", "f1", "precision"]:
+            if torch.is_complex(train_predictions):
+                # only use real parts
+                current_train_preds = train_predictions.real
+                current_test_preds = test_predictions.real
+            elif isinstance(model, CliffordKAN):
+                current_train_preds = train_predictions[...,0]
+                current_test_preds = test_predictions[...,0]
+        # if softmax should be applied (and loss function is not CE; CE requires raw logits)
         if add_softmax_lastlayer and loss_fn_name != "cross_entropy":
             # apply softmax
             current_train_preds = torch.nn.functional.softmax(current_train_preds, dim=1)
