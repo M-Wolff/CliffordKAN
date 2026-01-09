@@ -6,6 +6,8 @@ Description: Main loop for training all kinds of KANs on any dataset with arbitr
 import torch
 from torch.utils.data import DataLoader
 
+from cvkan.models.CliffordKAN import CliffordKAN
+
 from ..models.wrapper import PyKANWrapper 
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
@@ -62,7 +64,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
             f"Final Train Loss: {[(lfn, l.item()) for lfn, l in train_losses.items()]}, Final Test Loss: {[(lfn, l.item()) for lfn, l in test_losses.items()]}")
         return train_losses, test_losses
     # if model is not PyKAN Wrapper, check if batch_size is > 0 (for pykan batch size should be -1)
-    assert batch_size > 0
+    assert batch_size > 0, f"Model {type(model)} has Batch-Size {batch_size} <= 0!"
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     print("Number of trainable parameters in the model: ", get_num_parameters(model))
 
@@ -90,7 +92,14 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
             y = y.to(device)
             # potentially convert model's output to real
             if last_layer_output_real:
-                train_predictions = model(X).real
+                output = model(X)
+                if torch.is_complex(output):
+                    train_predictions = output.real
+                elif isinstance(model, CliffordKAN):
+                    # Clifford
+                    train_predictions = output[...,0]
+                else:
+                    raise NotImplementedError()
             else:
                 train_predictions = model(X)
             # calculate loss for backprop

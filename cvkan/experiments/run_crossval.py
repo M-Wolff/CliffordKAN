@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import torch
+import filelock
 
 from ..train.train_loop import train_kans
 from ..utils.dataloading.crossval_splitter import split_crossval
@@ -66,7 +67,8 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["num_trainable_params"] = get_num_parameters(model)
     results["zsilu_type"] = model.csilu_type if hasattr(model, "csilu_type") else None
     results["start_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    results["cliffkan_use_full_grid"] = model.use_full_grid if isinstance(model, CliffordKAN) else None
+    results["clifford_extra_args"] = model.clifford_extra_args if isinstance(model, CliffordKAN) else None
+
 
     # iterate over the k folds
     for i, d in enumerate(datasets):
@@ -94,11 +96,13 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["finish_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     print(results)
     results_file = Path(os.path.abspath(__file__)).parent / "results.json"
-    if results_file.exists():
-        with open(results_file, "r", encoding="utf-8") as f:
-            all_results = json.load(f)
-    else:
-        all_results = []
-    all_results.append(results)
-    with open(results_file, "w+", encoding="utf-8") as f:
-        json.dump(all_results, f)
+    lock = filelock.FileLock("resultsfile.lock")
+    with lock:
+        if results_file.exists():
+            with open(results_file, "r", encoding="utf-8") as f:
+                all_results = json.load(f)
+        else:
+            all_results = []
+        all_results.append(results)
+        with open(results_file, "w+", encoding="utf-8") as f:
+            json.dump(all_results, f)

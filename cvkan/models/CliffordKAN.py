@@ -1,6 +1,3 @@
-# TODO check if gradients are the same after very first forward pass
-# TODO compare for complex-values the grid nd with 2 x grid and grid x grid
-#       maybe even sth fancier (limit to 3D / 2D with PGA/CGA) PGA projected GA (computer graphics) , CGA = conformal GA (model circels, spheres)
 # in 3D: metric=[3,0,0] and PGA [3,0,1] and CGA in 3d: [4,1,0]
 # in 2D: [2,0,0],  PGA [2,0,1], CGA [3,1,0]
 """
@@ -44,7 +41,7 @@ def create_grid2d_full(grid_min, grid_max, num_grids):
     
 
 class CliffordKANLayer(torch.nn.Module):
-    def __init__(self, metric: list[float], input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", use_full_grid=True):
+    def __init__(self, metric: list[float], input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", clifford_extra_args=None):
         """
         :param metric: the Geometric Algebra metric (list[float])
         :param input_dim: input dimension size of Layer (Layer Width)
@@ -58,6 +55,8 @@ class CliffordKANLayer(torch.nn.Module):
         :param use_full_grid: whether to use full grid (i.e. [8^2]) or not (i.e. [8 x 2])
         """
         super().__init__()
+        assert clifford_extra_args is not None
+        self.clifford_extra_args = clifford_extra_args
         self.metric = metric
         self.algebra = GeometricAlgebra(metric)
         self.cayley = self.algebra.cayley  # we need a copy to move cayley to gpu/cpu accordingly in to(...) method
@@ -70,7 +69,6 @@ class CliffordKANLayer(torch.nn.Module):
         self.grid_max = grid_max
         self.silu_type = silu_type
         self.use_norm = use_norm
-        self.use_full_grid = use_full_grid
         # initialize Norm instance corresponding to self.use_norm
         if self.use_norm == Norms.BatchNormComponentWise:
             # component-wise BatchNorm
@@ -83,18 +81,18 @@ class CliffordKANLayer(torch.nn.Module):
             raise NotImplementedError()
 
         # grid is a non-trainable Parameter
-        if self.use_full_grid:
+        if self.clifford_extra_args["clifford_grid"] == "full_grid":
             grid = create_grid2d_full(grid_min, grid_max, num_grids)
-        else:
+        elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
             grid = create_gridnd(self.num_dim,grid_min, grid_max, num_grids)
 
         self.grid = torch.nn.Parameter(grid, requires_grad=False)
         
         self.rho = rho
         # weights for each RBF centered around the grid points
-        if self.use_full_grid:
+        if self.clifford_extra_args["clifford_grid"] == "full_grid":
             self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids,num_grids, self.num_dim)), requires_grad=True)
-        else:
+        elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
             self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids,self.num_dim)), requires_grad=True)  # for clifford kan independant dims
         # initialize CSiLU weight to use based on selected csilu_type
         if self.silu_type == "componentwise":
@@ -113,26 +111,40 @@ class CliffordKANLayer(torch.nn.Module):
         # grid is [num_grids x num_dim]
         # apply RBF on x (centered around each grid point)
         # x needs to be expanded to gain a grid dimension (is then [Batch x Input x self.num_grids  x self.num_dim])
-        if self.use_full_grid:
+        if self.clifford_extra_args["clifford_grid"] == "full_grid":
             x = x.unsqueeze(-1).unsqueeze(-1).expand(x.shape + (self.num_grids, self.num_grids))
             x = torch.permute(x, dims=(0,1,3,4,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
-        else:
+        elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
             x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
             x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
-        result = torch.exp(-(self.algebra.norm(x - self.grid)) ** 2 / self.rho)
-        result = result.squeeze(dim=-1)
-        # TODO attention: result is now a real-valued tensor! no longer clifford-valued
         # i and o are input and output indices within layer layer_idx and layer_ix+1
         # d is dimension and g is grid
-        if self.use_full_grid:
-            result = torch.einsum("biuv,iouvx->biox", result, self.weights)  # clifford dependant dimensions (only works for CV)
-            #result = torch.einsum("biuvx,iouvy,xyz->bioz", result, self.weights, self.cayley)  # clifford dependant dimensions (only works for CV)
-            #ic(result)
-            x = x[:,:,0,0,:]
-        else:
-            result = torch.einsum("bigx,iogy,xyz->bioz", result, self.weights, self.cayley)  # clifford independant dimensions
-            x = x[:,:,0,:]
-        # Intention: result = torch.einsum("bidg,iodg->bod", result, self.weights)
+        if self.clifford_extra_args["clifford_rbf"]=="naive":
+            result = torch.exp(-(self.algebra.norm(x - self.grid)) ** 2 / self.rho)
+            result = result.squeeze(dim=-1)
+            if self.clifford_extra_args["clifford_grid"] == "full_grid":
+                result = torch.einsum("biuv,iouvx->biox", result, self.weights)  # clifford dependant dimensions (# TODO right now only works for CV)
+                x = x[:,:,0,0,:]
+            elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
+                result = torch.einsum("big,iogx->biox", result, self.weights)
+                x = x[:,:,0,:]
+
+        elif self.clifford_extra_args["clifford_rbf"]=="cliffordspace":
+            result = torch.exp(-(self.algebra.norm(x - self.grid)) ** 2 / self.rho)
+            # TODO this works only for 2-dimensional clifford spaces (i.e. CV) right now
+            result = result.squeeze(dim=-1)
+            result = torch.stack([result, torch.zeros_like(result)], dim=-1)  # after norm and exp last dimension is always 1, fill up to make it clifford-valued again
+            if self.clifford_extra_args["clifford_grid"] == "full_grid":
+                # multiply by (x-self.grid) in clifford space # TODO check if this is correct
+                result = torch.einsum("biuvx,biuvy,xyz->biuvz", result, (x-self.grid), self.cayley)  # clifford dependant dimensions (# TODO only works for CV)
+                result = torch.einsum("biuvx,iouvy,xyz->bioz", result, self.weights, self.cayley)  # clifford dependant dimensions (# TODO only works for CV)
+                x = x[:,:,0,0,:]
+            elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
+                # multiply by (x-self.grid) in clifford space # TODO check if this is correct
+                result = torch.einsum("bigx,bigy,xyz->bigz", result, (x-self.grid), self.cayley)  # clifford independant dimensions
+                # Intention: result = torch.einsum("bidg,iodg->bod", result, self.weights)
+                result = torch.einsum("bigx,iogy,xyz->bioz", result, self.weights, self.cayley)  # clifford independant dimensions
+                x = x[:,:,0,:]
         assert result.shape[2] == self.output_dim, f"Wrong Output Dimension! Got {result.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}]"
         # SiLU
         silu_value = torch.einsum("iox,biy,xyz->bioz", self.silu_weight, self.silu(x), self.cayley)
@@ -152,6 +164,7 @@ class CliffordKANLayer(torch.nn.Module):
         super().to(device)
         # move grid to the right device
         self.grid = self.grid.to(device)
+        self.algebra = self.algebra.to(device)
         if self.use_norm is not None:  # and Norm as well
             self.norm = self.norm.to(device)
         self.silu = self.silu.to(device)
@@ -166,7 +179,7 @@ class CliffordKAN(torch.nn.Module):
                  grid_mins = -2,
                  grid_maxs = 2,
                  silu_type = "componentwise",
-                 use_full_grid=True):
+                 clifford_extra_args=None):
         """
         :param metric: the Geometric Algebra metric (list[float])
         :param layers_hidden: List with Layer Sizes (i.e. [1,5,3,1] for a 1x5x3x1 CVKAN)
@@ -176,7 +189,7 @@ class CliffordKAN(torch.nn.Module):
         :param grid_mins: left limit of grid
         :param grid_maxs: right limit of grid
         :param silu_type: type of SiLU to use (i.e. componentwise, ...)
-        :param use_full_grid: whether to use full grid (i.e. [8^2]) or not (i.e. [8 x 2])
+        :param clifford_extra_args: controls grid and RBF variant
         """
         super().__init__()
         # convert grid limits to list if not already is list (limits for each layer independently)
@@ -184,6 +197,8 @@ class CliffordKAN(torch.nn.Module):
             grid_mins = [grid_mins] * len(layers_hidden)
         if not type(grid_maxs) == list:
             grid_maxs = [grid_maxs] * len(layers_hidden)
+        assert clifford_extra_args is not None
+        self.clifford_extra_args = clifford_extra_args
         self.metric = metric
         self.algebra = GeometricAlgebra(metric)
         # coordinate dimension
@@ -193,7 +208,6 @@ class CliffordKAN(torch.nn.Module):
         self.rho = rho
         self.use_norm = use_norm
         self.silu_type = silu_type
-        self.use_full_grid = use_full_grid
         # convert silu_type to list (each layer could get it's own SiLU type)
         if type(self.use_norm) != list:
             self.use_norm = [self.use_norm] * (len(layers_hidden) - 1)
@@ -208,7 +222,7 @@ class CliffordKAN(torch.nn.Module):
         self.layers = torch.nn.ModuleList([CliffordKANLayer(metric=self.metric, input_dim=layers_hidden[i], output_dim=layers_hidden[i+1],
                                                       num_grids=num_grids, grid_min=grid_mins[i], grid_max=grid_maxs[i],
                                                       rho=self.rho, use_norm=self.use_norm[i],
-                                                      silu_type=self.silu_type, use_full_grid=self.use_full_grid) for i in range(len(layers_hidden) - 1)])
+                                                      silu_type=self.silu_type, clifford_extra_args=clifford_extra_args) for i in range(len(layers_hidden) - 1)])
     def forward(self, x):
         # make sure x is batched
         if len(x.shape) == 2:  # x might be [input-dim x num_dims] (i.e. a single clifford number)
