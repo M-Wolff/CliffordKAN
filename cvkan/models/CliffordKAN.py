@@ -9,6 +9,7 @@ from typing import List
 import torch
 #from torch_ga import GeometricAlgebra
 from torch_ga.clifford import CliffordAlgebra as GeometricAlgebra
+#from torch_ga.clifford import GeometricAlgebra
 from icecream import ic
 ic.configureOutput(includeContext=True)
 from ..utils.norm_functions import ComponentwiseBatchNorm1d, Norms
@@ -41,7 +42,7 @@ def create_grid2d_full(grid_min, grid_max, num_grids):
     
 
 class CliffordKANLayer(torch.nn.Module):
-    def __init__(self, metric: list[float], input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", clifford_extra_args=None):
+    def __init__(self, algebra, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", clifford_extra_args=None):
         """
         :param metric: the Geometric Algebra metric (list[float])
         :param input_dim: input dimension size of Layer (Layer Width)
@@ -57,8 +58,7 @@ class CliffordKANLayer(torch.nn.Module):
         super().__init__()
         assert clifford_extra_args is not None
         self.clifford_extra_args = clifford_extra_args
-        self.metric = metric
-        self.algebra = GeometricAlgebra(metric)
+        self.algebra = algebra
         self.cayley = self.algebra.cayley  # we need a copy to move cayley to gpu/cpu accordingly in to(...) method
         # num_dim is 2^num_bases
         self.num_dim = 1 << self.algebra.num_bases
@@ -171,7 +171,7 @@ class CliffordKANLayer(torch.nn.Module):
         self.cayley = self.cayley.to(device)
 class CliffordKAN(torch.nn.Module):
     def __init__(self,
-                 metric: list[float],
+                 algebra,
                  layers_hidden: List[int],
                  num_grids: int = 8,
                  rho=1,
@@ -199,8 +199,7 @@ class CliffordKAN(torch.nn.Module):
             grid_maxs = [grid_maxs] * len(layers_hidden)
         assert clifford_extra_args is not None
         self.clifford_extra_args = clifford_extra_args
-        self.metric = metric
-        self.algebra = GeometricAlgebra(metric)
+        self.algebra = algebra
         # coordinate dimension
         self.num_dim = self.algebra.num_bases + 1
         self.layers_hidden = layers_hidden
@@ -219,7 +218,7 @@ class CliffordKAN(torch.nn.Module):
         # Array with Normalization schemes to use after every layer
         self.use_norm = [norm_to_use(i) for i in range(len(layers_hidden)-1)]
         # stack Layers into a ModuleList
-        self.layers = torch.nn.ModuleList([CliffordKANLayer(metric=self.metric, input_dim=layers_hidden[i], output_dim=layers_hidden[i+1],
+        self.layers = torch.nn.ModuleList([CliffordKANLayer(algebra=self.algebra, input_dim=layers_hidden[i], output_dim=layers_hidden[i+1],
                                                       num_grids=num_grids, grid_min=grid_mins[i], grid_max=grid_maxs[i],
                                                       rho=self.rho, use_norm=self.use_norm[i],
                                                       silu_type=self.silu_type, clifford_extra_args=clifford_extra_args) for i in range(len(layers_hidden) - 1)])
