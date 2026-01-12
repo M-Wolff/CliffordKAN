@@ -96,7 +96,7 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["finish_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     print(results)
     results_file = Path(os.path.abspath(__file__)).parent / "results.json"
-    lock = filelock.FileLock("resultsfile.lock")
+    lock = filelock.FileLock(Path(__file__).parent / "resultsfile.lock")
     with lock:
         if results_file.exists():
             with open(results_file, "r", encoding="utf-8") as f:
