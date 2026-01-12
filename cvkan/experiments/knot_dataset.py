@@ -13,6 +13,7 @@ import pandas as pd
 import torch
 import torchmetrics
 from icecream import ic
+import copy
 
 from ..experiments.run_crossval import run_crossval
 from ..models.CVKAN import Norms
@@ -23,6 +24,10 @@ from ..models.CliffordKAN import CliffordKAN
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..experiments.fit_formulas import convert_complex_dataset_to_clifford
 from ..utils.loss_functions import MAE,MSE
+
+from torch_ga.clifford.algebra import CliffordAlgebra
+
+_DEVICE = "cuda"
 
 def load_knot_dataset_real(input_filename=Path("/home/m_wolf37/Datasets/knot_theory_invariants.csv"), train_test_split="70:30"):
     """
@@ -44,6 +49,7 @@ def load_knot_dataset_real(input_filename=Path("/home/m_wolf37/Datasets/knot_the
 
     return dataset
 def convert_knot_real_to_complex(dataset: CSVDataset):
+    dataset = copy.deepcopy(dataset)  # keep original dataset untouched and safe
     # otherwise: use this dataset to construct a complex-valued dataset
     num_train, num_test = dataset.data["train_input"].shape[0], dataset.data["test_input"].shape[0]
     num_complex_input_vars = len(dataset.input_varnames) - 2  # -2 because there are already 2 complex numbers in the dataset (split in Re and Im)
@@ -83,6 +89,7 @@ def convert_knot_real_to_complex(dataset: CSVDataset):
     dataset_complex.input_varnames = input_vars_short_complex
     return dataset_complex
 def convert_knot_complex_to_clifford(dataset: CSVDataset):
+    dataset = copy.deepcopy(dataset)  # keep original dataset untouched and safe
     clifford_dict = dict()
     clifford_dict["train_input"] = torch.zeros(size=dataset.data["train_input"].shape + (2,))
     clifford_dict["train_input"][...,0] = dataset.data["train_input"].real
@@ -117,6 +124,7 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
     knot_dataset_complex = convert_knot_real_to_complex(knot_dataset_real)
     knot_dataset_cliff = convert_knot_complex_to_clifford(knot_dataset_complex)
     in_features_complex = len(knot_dataset_complex.input_varnames)
+    in_features_real = len(knot_dataset_real.input_varnames)
     num_classes = len(knot_dataset_complex.output_varnames)
 
     crossentropy_loss = torch.nn.CrossEntropyLoss()
@@ -124,12 +132,13 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
     loss_fns = dict()
     loss_fns["cross_entropy"] = crossentropy_loss
     loss_fns["accuracy"] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes).to(_DEVICE)
-    for arch in [(in_features_complex, 1, num_classes), (in_features_complex, 2, num_classes)]:
+    for arch in [(in_features_real, 1, num_classes), (in_features_real, 2, num_classes)]:
             ################################# FastKAN #################################
             if run_models[1]:
                 fastkan = FastKAN(layers_hidden=list(arch), num_grids=64, use_batchnorm=True, grid_mins=-2, grid_maxs=2)
                 run_crossval(fastkan, knot_dataset_real, dataset_name="knot_r", loss_fn_backprop=crossentropy_loss, loss_fns=loss_fns, device=_DEVICE,
                              batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=False)
+    for arch in [(in_features_complex, 1, num_classes), (in_features_complex, 2, num_classes)]:
             ################################# CVKAN #################################
             if run_models[2]:
                 cvkan = CVKANWrapper(layers_hidden=arch, num_grids=8, rho=1, use_norm=Norms.BatchNorm, grid_mins=-2, grid_maxs=2, csilu_type="complex_weight")
@@ -139,8 +148,9 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
             ################################# Clifford-KAN #################################
             if run_models[3]:
                 # TODO metric should not be hardcoded here for later experiments
-                cliffkan = CliffordKAN(layers_hidden=list(arch), metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
-                run_crossval(cliffkan, knot_dataset_cliff, dataset_name="knot_cliff", loss_fn_backprop=crossentropy_loss,loss_fns=loss_fns, batch_size=10000, logging_interval=50,add_softmax_lastlayer=True, epochs=1000, convert_model_output_to_real=True)
+                algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+                cliffkan = CliffordKAN(layers_hidden=list(arch), algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+                run_crossval(cliffkan, knot_dataset_cliff, dataset_name="knot_cliff", loss_fn_backprop=crossentropy_loss,loss_fns=loss_fns, batch_size=10000, logging_interval=50,add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=True)
 
 
 def train_knot_feature_subset():
@@ -177,7 +187,3 @@ def train_knot_feature_subset():
                      loss_fns=loss_fns, device=_DEVICE,
                      batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=200,
                      convert_model_output_to_real=True)
-
-if __name__ == "__main__":
-    #run_experiments()
-    train_knot_feature_subset()
