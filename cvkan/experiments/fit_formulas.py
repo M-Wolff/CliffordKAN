@@ -18,6 +18,9 @@ from cvkan.utils.dataloading.csv_dataloader import CSVDataset
 from cvkan.utils.loss_functions import MSE, MAE
 from cvkan.utils.norm_functions import Norms
 from cvkan.models.CliffordKAN import CliffordKAN
+
+from torch_ga.clifford.algebra import CliffordAlgebra
+
 from icecream import ic
 from pathlib import Path
 
@@ -27,6 +30,9 @@ mae_loss = MAE()
 loss_fns = dict()
 loss_fns["mse"] = mse_loss
 loss_fns["mae"] = mae_loss
+
+_DATASET_SAVEDIR = Path(__file__).parent / "generated_datasets"
+_DEVICE = "cuda"
 
 def convert_complex_dataset_to_clifford(dataset: CSVDataset):
     """Converts a complex dataset to a dataset in clifford space"""
@@ -183,7 +189,7 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
             if run_models[0]:
                 # important to put batch_size = -1 for PyKAN as they do batching differently (randomly sampling
                 # batch_size samples per step)
-                pykan = PyKANWrapper(layers_hidden=arch, num_grids=64, update_grid=True, device="cuda")
+                pykan = PyKANWrapper(layers_hidden=arch, num_grids=64, update_grid=True, device=_DEVICE)
                 run_crossval(pykan, dataset_holography_r, dataset_name="ph_holo_r"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,
                              loss_fns=loss_fns,
                              batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -191,9 +197,7 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
                 fastkan = FastKAN(layers_hidden=arch, num_grids=64, use_batchnorm=True)
                 run_crossval(fastkan, dataset_holography_r, dataset_name="ph_holo_r"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                              batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
-        #for arch in [[3,1], [3,1,1], [3,3,1], [3,10,1], [3,10,3,1], [3,10,5,3,1]]:
-        # TODO change back
-        for arch in [[3,10,1], [3,10,3,1], [3,10,5,3,1]]:
+        for arch in [[3,1], [3,1,1], [3,3,1], [3,10,1], [3,10,3,1], [3,10,5,3,1]]:
             if run_models[2]:
                 cvkan = CVKANWrapper(layers_hidden=arch, num_grids=8, rho=1, use_norm=Norms.BatchNorm)
                 run_crossval(cvkan, dataset_holography_c, dataset_name="ph_holo_c"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,
@@ -202,7 +206,8 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
                              convert_model_output_to_real=False)
             if run_models[3]:
                 # TODO metric should not be hardcoded here for later experiments
-                cliffkan = CliffordKAN(layers_hidden=arch, metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+                algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+                cliffkan = CliffordKAN(layers_hidden=arch, algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
                 loss_fns["mse"] = MSE(ga=cliffkan.algebra)
                 loss_fn_backprop = loss_fns["mse"]
                 run_crossval(cliffkan, dataset_holography_cliff, dataset_name="ph_holo_cliff" + _dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -211,7 +216,7 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
             if run_models[0]:
                 # important to put batch_size = -1 for PyKAN as they do batching differently (randomly sampling
                 # batch_size samples per step)
-                pykan = PyKANWrapper(layers_hidden=arch, num_grids=64, update_grid=True, device="cuda")
+                pykan = PyKANWrapper(layers_hidden=arch, num_grids=64, update_grid=True, device=_DEVICE)
                 run_crossval(pykan, dataset_circuit_r, dataset_name="ph_circuit_r"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,
                              loss_fns=loss_fns,
                              batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -219,9 +224,7 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
                 fastkan = FastKAN(layers_hidden=arch, num_grids=64, use_batchnorm=True)
                 run_crossval(fastkan, dataset_circuit_r, dataset_name="ph_circuit_r"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                              batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
-        #for arch in [[6,1], [6,1,1], [6,3,1], [6,10,1], [6,10,3,1], [6,10,5,3,1]]:
-        # TODO change back
-        for arch in [[6,10,1], [6,10,3,1], [6,10,5,3,1]]:
+        for arch in [[6,1], [6,1,1], [6,3,1], [6,10,1], [6,10,3,1], [6,10,5,3,1]]:
             if run_models[2]:
                 cvkan = CVKANWrapper(layers_hidden=arch, num_grids=8, rho=1, use_norm=Norms.BatchNorm)
                 run_crossval(cvkan, dataset_circuit_c, dataset_name="ph_circuit_c"+_dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,
@@ -230,7 +233,8 @@ def run_experiments_physics(run_dataset, run_model, clifford_extra_args=None):
                              convert_model_output_to_real=False)
             if run_models[3]:
                 # TODO metric should not be hardcoded here for later experiments
-                cliffkan = CliffordKAN(layers_hidden=arch, metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+                algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+                cliffkan = CliffordKAN(layers_hidden=arch, algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
                 loss_fns["mse"] = MSE(ga=cliffkan.algebra)
                 loss_fn_backprop = loss_fns["mse"]
                 run_crossval(cliffkan, dataset_circuit_cliff, dataset_name="ph_circuit_cliff" + _dataset_name_suffix, loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=10000, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -296,12 +300,12 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
     # Square Dataset = z**2
     if run_datasets[0]:
         if run_models[0]:
-            pykan = PyKANWrapper(layers_hidden=[2, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[2, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sq_r, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            pykan = PyKANWrapper(layers_hidden=[2, 3, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[2, 3, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sq_r, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -323,25 +327,26 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
         if run_models[3]:
             # TODO metric should not be hardcoded here for later experiments
-            cliffkan = CliffordKAN(layers_hidden=[1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+            cliffkan = CliffordKAN(layers_hidden=[1,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
 
-            cliffkan = CliffordKAN(layers_hidden=[1,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            cliffkan = CliffordKAN(layers_hidden=[1,2,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sq_cliff, dataset_name="ff_square", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
     # Square Square Dataset = (z_1**2 + z_2**2)**2
     if run_datasets[1]:
         if run_models[0]:
-            pykan = PyKANWrapper(layers_hidden=[4, 2, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[4, 2, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sqsq_r, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            pykan = PyKANWrapper(layers_hidden=[4, 6, 2, 3, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[4, 6, 2, 3, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sqsq_r, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -363,12 +368,13 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
         if run_models[3]:
             # TODO metric should not be hardcoded here for later experiments
-            cliffkan = CliffordKAN(layers_hidden=[2,1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+            cliffkan = CliffordKAN(layers_hidden=[2,1,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sqsq_cliff, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sqsq_cliff, dataset_name="ff_squaresquare", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -376,12 +382,12 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
     # Mult Dataset = z_1 * z_2
     if run_datasets[2]:
         if run_models[0]:
-            pykan = PyKANWrapper(layers_hidden=[4, 4, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[4, 4, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_mult_r, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            pykan = PyKANWrapper(layers_hidden=[4, 8, 4, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[4, 8, 4, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_mult_r, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -404,12 +410,13 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
         if run_models[3]:
             # TODO metric should not be hardcoded here for later experiments
-            cliffkan = CliffordKAN(layers_hidden=[2,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+            cliffkan = CliffordKAN(layers_hidden=[2,2,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_mult_cliff, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            cliffkan = CliffordKAN(layers_hidden=[2,4,2,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_mult_cliff, dataset_name="ff_mult", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -417,12 +424,12 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
     # sin Dataset = sin(z)
     if run_datasets[3]:
         if run_models[0]:
-            pykan = PyKANWrapper(layers_hidden=[2, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[2, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sin_r, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            pykan = PyKANWrapper(layers_hidden=[2, 4, 4, 2], num_grids=64, update_grid=True, device="cuda")
+            pykan = PyKANWrapper(layers_hidden=[2, 4, 4, 2], num_grids=64, update_grid=True, device=_DEVICE)
             run_crossval(pykan, dataset_sin_r, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,
                          loss_fns=loss_fns,
                          batch_size=-1, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
@@ -445,34 +452,13 @@ def run_experiments_funcfitting(run_dataset = "all", run_model="all", clifford_e
                          batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
         if run_models[3]:
             # TODO metric should not be hardcoded here for later experiments
-            cliffkan = CliffordKAN(layers_hidden=[1,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
+            cliffkan = CliffordKAN(layers_hidden=[1,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sin_cliff, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
 
-            cliffkan = CliffordKAN(layers_hidden=[1,2,1], metric=[-1], num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+            cliffkan = CliffordKAN(layers_hidden=[1,2,1], algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
             loss_fns["mse"] = MSE(ga=cliffkan.algebra)
             loss_fn_backprop = loss_fns["mse"]
             run_crossval(cliffkan, dataset_sin_cliff, dataset_name="ff_sin", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=500, add_softmax_lastlayer=False, epochs=1000, convert_model_output_to_real=False)
-
-
-if __name__ == "__main__":
-    _DATASET_SAVEDIR = Path(__file__).parent / "generated_datasets"
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', nargs='?', default="all", type=str, help="Dataset to run on. Can be {holography,circuit,square,squaresquare,mult,sinus}")
-    parser.add_argument('--model', nargs='?', default="all", type=str, help="Model to run experiment on. Can be {pykan,fastkan,cvkan,cliffkan,all}")
-    parser.add_argument("--task", type=str, default="funcfit", help="Task to run on. Can be one of {funcfit, physics}") #, required=True)
-    parser.add_argument("--clifford_grid", type=str, default=None, help="One of {full_grid, independant_grid} for CliffordKAN")
-    parser.add_argument("--clifford_rbf", type=str, default=None, help="Type of RBF calculation to use for CliffordKAN. One of {naive,cliffordspace}")
-
-    args = parser.parse_args()
-    print("Running Function Fitting Eperiments for Dataset ", args.dataset, " and Model ", args.model, " and Task ", args.task)
-    # check if clifford_grid and clifford_rbf exist, if model is cliffkan or all, otherwise throw error
-    if args.model in ["cliffkan", "all"]:
-        assert args.clifford_grid in ["full_grid","independant_grid"], "For Model 'cliffkan' parameter --clifford_grid must be set"
-        assert args.clifford_rbf in ["naive","cliffordspace"], "For Model 'cliffkan' parameter --clifford_rbf must be set"
-    clifford_extra_args = {"clifford_grid": args.clifford_grid, "clifford_rbf": args.clifford_rbf}
-    if args.task == "funcfit":
-        run_experiments_funcfitting(run_dataset=args.dataset, run_model=args.model, clifford_extra_args=clifford_extra_args)
-    if args.task == "physics":
-        run_experiments_physics(run_dataset=args.dataset, run_model=args.model, clifford_extra_args=clifford_extra_args)
