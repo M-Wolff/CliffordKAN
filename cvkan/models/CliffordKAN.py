@@ -14,7 +14,20 @@ from icecream import ic
 ic.configureOutput(includeContext=True)
 from ..utils.norm_functions import ComponentwiseBatchNorm1d, Norms
 
-def create_gridnd(num_dim, grid_min, grid_max, num_grids):
+def create_gridnd_full(grid_min, grid_max, num_grids, num_dim):
+    axes = [
+        torch.linspace(grid_min, grid_max, num_grids)
+        for _ in range(num_dim)
+    ]
+
+    # meshgrid creates num_dim tensors of shape [num_grids, ..., num_grids]
+    grids = torch.meshgrid(*axes, indexing="ij")
+
+    # stack coordinates in last dimension
+    grid = torch.stack(grids, dim=-1)
+    return grid
+
+def create_gridnd_independent(num_dim, grid_min, grid_max, num_grids):
     # create grid points n-D array
     # for complex-valued we have num_dim=2 and thus [2 x num_grids] as grid shape. In CVKAN we had [num_grids x num_grids] but this probably doesn't scale well for clifford kan and higher dims? So now we treat each component independently.
     # create grid (linspace from grid_min to grid_max consisting of num_grids grid points)
@@ -82,18 +95,18 @@ class CliffordKANLayer(torch.nn.Module):
 
         # grid is a non-trainable Parameter
         if self.clifford_extra_args["clifford_grid"] == "full_grid":
-            grid = create_grid2d_full(grid_min, grid_max, num_grids)
+            grid = create_gridnd_full(grid_min, grid_max, num_grids, self.num_dim)
         elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
-            grid = create_gridnd(self.num_dim,grid_min, grid_max, num_grids)
+            grid = create_gridnd_independent(self.num_dim,grid_min, grid_max, num_grids)
 
         self.grid = torch.nn.Parameter(grid, requires_grad=False)
         
         self.rho = rho
         # weights for each RBF centered around the grid points
         if self.clifford_extra_args["clifford_grid"] == "full_grid":
-            self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids,num_grids, self.num_dim)), requires_grad=True)
+            self.weights = torch.nn.Parameter(torch.randn(size=((input_dim, output_dim,) + self.num_dim*(self.num_grids,))), requires_grad=True)
         elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
-            self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids,self.num_dim)), requires_grad=True)  # for clifford kan independant dims
+            self.weights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, self.num_grids,self.num_dim)), requires_grad=True)  # for clifford kan independant dims
         # initialize CSiLU weight to use based on selected csilu_type
         if self.silu_type == "componentwise":
             self.silu_weight = torch.ones(size=(self.input_dim, self.output_dim, self.num_dim), dtype=torch.float32)
@@ -110,10 +123,11 @@ class CliffordKANLayer(torch.nn.Module):
         assert len(x.shape) == 3 and x.shape[1] == self.input_dim and x.shape[2] == self.num_dim, f"Wrong Input Dimension! Got {x.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}] and num_dims = {self.num_dim}"
         # grid is [num_grids x num_dim]
         # apply RBF on x (centered around each grid point)
-        # x needs to be expanded to gain a grid dimension (is then [Batch x Input x self.num_grids  x self.num_dim])
         if self.clifford_extra_args["clifford_grid"] == "full_grid":
-            x = x.unsqueeze(-1).unsqueeze(-1).expand(x.shape + (self.num_grids, self.num_grids))
-            x = torch.permute(x, dims=(0,1,3,4,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
+            #x = x.unsqueeze(-1).unsqueeze(-1).expand(x.shape + (self.num_grids, self.num_grids))
+            x = x.unsqueeze(-1).unsqueeze(-1).expand(x.shape + self.num_dim*(self.num_grids,))
+            x = x.movedim(2,-1) # switch clifford dimension (2) to the last place and keep grid dimension ordeing intact
+            #x = torch.permute(x, dims=(0,1,3,4,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
         elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
             x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
             x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
@@ -123,7 +137,8 @@ class CliffordKANLayer(torch.nn.Module):
             result = torch.exp(-(self.algebra.norm(x - self.grid)) ** 2 / self.rho)
             result = result.squeeze(dim=-1)
             if self.clifford_extra_args["clifford_grid"] == "full_grid":
-                result = torch.einsum("biuv,iouvx->biox", result, self.weights)  # clifford dependant dimensions (# TODO right now only works for CV)
+                result = torch.einsum("bi...,io...x->biox", result, self.weights)  # clifford dependant dimensions
+                result = torch.einsum("bi...,io...x->biox", result, self.weights)  # clifford dependant dimensions
                 x = x[:,:,0,0,:]
             elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
                 result = torch.einsum("big,iogx->biox", result, self.weights)
@@ -136,8 +151,8 @@ class CliffordKANLayer(torch.nn.Module):
             result = torch.stack([result, torch.zeros_like(result)], dim=-1)  # after norm and exp last dimension is always 1, fill up to make it clifford-valued again
             if self.clifford_extra_args["clifford_grid"] == "full_grid":
                 # multiply by (x-self.grid) in clifford space # TODO check if this is correct
-                result = torch.einsum("biuvx,biuvy,xyz->biuvz", result, (x-self.grid), self.cayley)  # clifford dependant dimensions (# TODO only works for CV)
-                result = torch.einsum("biuvx,iouvy,xyz->bioz", result, self.weights, self.cayley)  # clifford dependant dimensions (# TODO only works for CV)
+                result = torch.einsum("bi....x,bi...y,xyz->bi...z", result, (x-self.grid), self.cayley)  # clifford dependant dimensions
+                result = torch.einsum("bi...x,io...y,xyz->bioz", result, self.weights, self.cayley)  # clifford dependant dimensions
                 x = x[:,:,0,0,:]
             elif self.clifford_extra_args["clifford_grid"] == "independant_grid":
                 # multiply by (x-self.grid) in clifford space # TODO check if this is correct
