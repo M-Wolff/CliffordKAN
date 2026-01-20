@@ -29,7 +29,7 @@ from torch_ga.clifford.algebra import CliffordAlgebra
 
 _DEVICE = "cuda"
 
-def load_knot_dataset_real(input_filename=Path("/home/m_wolf37/Datasets/knot_theory_invariants.csv"), train_test_split="70:30"):
+def load_knot_dataset_real(input_filename=Path("/scratch/tmp/m_wolf37/Datasets/knot_theory_invariants.csv"), train_test_split="70:30"):
     """
     Load Knot Dataset from .csv file
     :param input_filename: Path to dataset .csv file
@@ -104,7 +104,7 @@ def convert_knot_complex_to_clifford(dataset: CSVDataset):
     dataset_clifford = CSVDataset(clifford_dict, input_vars=dataset.input_varnames, output_vars=["c" + str(i) for i in range(14)], categorical_vars=[])
     return dataset_clifford
 
-def run_experiments_knot(run_model="all", clifford_extra_args=None):
+def run_experiments_knot(run_model="all", extra_args=None):
     """Run the experiments on the Knot Dataset"""
     run_models = [False] * 4
     if run_model == "all":
@@ -118,6 +118,10 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
     elif run_model == "cliffkan":
         run_models[3] = True
     _DEVICE = torch.device("cuda")
+    if extra_args is not None and "norm" in extra_args:
+        norm_to_use = Norms(extra_args["norm"])
+    else:
+        norm_to_use = Norms.BatchNormComponentWise
     # load knot complex and real-valued with 100% train split
     # use 100% train split because run_crossval expects it this way and splits it into 5 non-overlapping folds
     knot_dataset_real = load_knot_dataset_real(train_test_split="100:0")
@@ -141,7 +145,7 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
     for arch in [(in_features_complex, 1, num_classes), (in_features_complex, 2, num_classes)]:
             ################################# CVKAN #################################
             if run_models[2]:
-                cvkan = CVKANWrapper(layers_hidden=arch, num_grids=8, rho=1, use_norm=Norms.BatchNorm, grid_mins=-2, grid_maxs=2, csilu_type="complex_weight")
+                cvkan = CVKANWrapper(layers_hidden=arch, num_grids=8, rho=1, use_norm=norm_to_use, grid_mins=-2, grid_maxs=2, csilu_type="complex_weight")
                 run_crossval(cvkan, knot_dataset_complex, dataset_name="knot_c", loss_fn_backprop=crossentropy_loss,
                              loss_fns=loss_fns, device=_DEVICE,
                              batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=True)
@@ -149,7 +153,7 @@ def run_experiments_knot(run_model="all", clifford_extra_args=None):
             if run_models[3]:
                 # TODO metric should not be hardcoded here for later experiments
                 algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
-                cliffkan = CliffordKAN(layers_hidden=list(arch), algebra=algebra, num_grids=8, rho=1, use_norm=Norms.BatchNormComponentWise, clifford_extra_args=clifford_extra_args)
+                cliffkan = CliffordKAN(layers_hidden=list(arch), algebra=algebra, num_grids=8, rho=1, use_norm=norm_to_use, extra_args=extra_args)
                 run_crossval(cliffkan, knot_dataset_cliff, dataset_name="knot_cliff", loss_fn_backprop=crossentropy_loss,loss_fns=loss_fns, batch_size=10000, logging_interval=50,add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=True)
 
 
