@@ -5,6 +5,7 @@ Description: Main loop for training all kinds of KANs on any dataset with arbitr
 """
 import torch
 from torch.utils.data import DataLoader
+from icecream import ic
 
 from cvkan.models.CliffordKAN import CliffordKAN
 
@@ -12,6 +13,8 @@ from ..models.wrapper import PyKANWrapper
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
 from ..utils.misc import get_num_parameters
+
+torch._logging.set_logs(graph_code=True)
 
 def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=torch.device("cuda"), epochs=5000,
                batch_size=1000, kan_explainer=None, logging_interval=50, add_softmax_lastlayer=False, last_layer_output_real=True, sparsify=False):
@@ -68,16 +71,15 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     print("Number of trainable parameters in the model: ", get_num_parameters(model))
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
     # decay learning rate by 0.6 every epochs//10 steps
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
 
     # train loop
-    epochs=1000
     for epoch in range(epochs):
         # evaluate without grads
         with torch.no_grad():
-            if epoch % logging_interval == 0:
+            if epoch % logging_interval == 0 and epoch != 0:
                 train_losses, test_losses = eval_model(model, loss_fns, train_data=dataset.data["train_input"].to(device),
                                                        test_data=dataset.data["test_input"].to(device),
                                                        train_label=dataset.data["train_label"].to(device),
@@ -85,8 +87,8 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                                                        add_softmax_lastlayer=add_softmax_lastlayer)
                 print(
                     f"Epoch {epoch} Train Loss: {[(lfn, l.item()) for lfn, l in train_losses.items()]}, Test Loss: {[(lfn, l.item()) for lfn, l in test_losses.items()]}, LR: {scheduler.get_last_lr()}")
-
         # iterate over all batches in train dataloader
+        model.train()
         for batch, (X, y) in enumerate(dataloader):
             X = X.to(device)
             y = y.to(device)
