@@ -5,16 +5,17 @@ Description: CVKAN Model definition
 """
 from typing import List
 import torch
+from icecream import ic
 
 
 from .functions.CV_LayerNorm import Complex_LayerNorm, Complex_BatchNorm, Complex_BatchNorm_naiv, \
     Complex_BatchNorm_var
 
 from .functions.ComplexSilu import complex_silu_complexweight, complex_silu_realweights
-from ..utils.norm_functions import Norms
+from ..utils.norm_functions import Norms, ComponentwiseBatchNorm1d, DimensionwiseBatchNorm1d, NodewiseBatchNorm1d
 
 class CVKANLayer(torch.nn.Module):
-    def __init__(self, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNorm, csilu_type="complex_weight"):
+    def __init__(self, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.NoNorm, csilu_type="complex_weight"):
         """
         :param input_dim: input dimension size of Layer (Layer Width)
         :param output_dim: output dimension size of Layer (next Layer's Width)
@@ -42,8 +43,17 @@ class CVKANLayer(torch.nn.Module):
             self.norm = Complex_BatchNorm_naiv(num_channel=output_dim)
         elif self.use_norm == Norms.BatchNormVar:
             self.norm = Complex_BatchNorm_var(num_channel=output_dim)
+        elif self.use_norm == Norms.BatchNormComponentWise:
+            # component-wise BatchNorm
+            self.norm = ComponentwiseBatchNorm1d(num_dimensions=2, input_length=self.output_dim)
+        elif self.use_norm == Norms.BatchNormDimensionwise:
+            # dimension-wise BatchNorm
+            self.norm = DimensionwiseBatchNorm1d(num_dimensions=2, input_length=self.output_dim)
+        elif self.use_norm == Norms.BatchNormNodewise:
+            # node-wise BatchNorm
+            self.norm = NodewiseBatchNorm1d(num_dimensions=2, input_length=self.output_dim)
         elif self.use_norm == Norms.NoNorm:
-            self.norm = None
+            self.norm = lambda x: x
         else:
             raise NotImplementedError()
         # create grid points 2D array
@@ -58,11 +68,7 @@ class CVKANLayer(torch.nn.Module):
         self.grid = torch.nn.Parameter(grid, requires_grad=False)
         self.rho = rho
         # weights for each RBF centered around the grid points
-        #self.dummyweights = ic(torch.randn(size=(input_dim, output_dim, num_grids, num_grids, 2)))
-        #self.realweights = torch.nn.Parameter(self.dummyweights[:,:,:,:,0], requires_grad=True)
-        #self.complexweights = torch.nn.Parameter(self.dummyweights[:,:,:,:,1], requires_grad=True)
-        self.realweights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids, num_grids)), requires_grad=True)
-        self.complexweights = torch.nn.Parameter(torch.randn(size=(input_dim, output_dim, num_grids, num_grids)), requires_grad=True)
+        self.random_init_weights()
         # initialize CSiLU weight to use based on selected csilu_type
         if self.csilu_type == "complex_weight":
             self.silu_weight = torch.nn.Parameter(torch.ones(size=(self.input_dim, self.output_dim), dtype=torch.complex64), requires_grad=True)
@@ -72,7 +78,15 @@ class CVKANLayer(torch.nn.Module):
             raise NotImplementedError()
         # add complex-valued bias to CSiLU
         self.silu_bias = torch.nn.Parameter(torch.zeros(size=(input_dim, output_dim), dtype=torch.complex64), requires_grad=True)
-
+    def random_init_weights(self):
+        if hasattr(self, "realweights"):
+            orig_device = self.realweights.device
+        else:
+            orig_device = None
+        self.realweights = torch.nn.Parameter(torch.randn(size=(self.input_dim, self.output_dim, self.num_grids, self.num_grids)), requires_grad=True)
+        self.complexweights = torch.nn.Parameter(torch.randn(size=(self.input_dim, self.output_dim, self.num_grids, self.num_grids)), requires_grad=True)
+        if orig_device is not None:
+            self.to(orig_device)
 
     def forward(self, x):
         # x has shape BATCH x Input-Dim
@@ -100,23 +114,22 @@ class CVKANLayer(torch.nn.Module):
         silu_value += self.silu_bias
         silu_value = torch.einsum("bio->bo", silu_value)
         result_complex = result_complex + silu_value
-        # potentially apply Normalization
-        if self.use_norm is not None:
-            result_complex = self.norm(result_complex)
+        # potentially apply Normalization (or identity lambda)
+        result_complex = self.norm(result_complex)
         return result_complex
 
     def to(self, device):
         super().to(device)
         # move grid to the right device
         self.grid = self.grid.to(device)
-        if self.use_norm is not None:  # and Norm as well
+        if self.use_norm is not Norms.NoNorm:  # and Norm as well
             self.norm = self.norm.to(device)
 class CVKAN(torch.nn.Module):
     def __init__(self,
                  layers_hidden: List[int],
                  num_grids: int = 8,
                  rho=1,
-                 use_norm=Norms.BatchNorm,
+                 use_norm=Norms.NoNorm,
                  grid_mins = -2,
                  grid_maxs = 2,
                  csilu_type = "complex_weight"):
@@ -169,6 +182,9 @@ class CVKAN(torch.nn.Module):
         for layer in self.layers:
             x = layer(x)
         return x
+    def random_init_weights(self):
+        for l in self.layers:
+            l.random_init_weights()
     def to(self, device):
         for layer in self.layers:
             layer.to(device)
