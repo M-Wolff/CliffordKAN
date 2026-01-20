@@ -68,7 +68,11 @@ class MAE(torch.nn.Module):
     """
     MAE as a torch module
     """
-    def __init__(self):
+    def __init__(self, ga=None):
         super().__init__()
+        self.ga = ga
     def forward(self, pred, label):
-        return torch.mean(torch.abs(pred - label))
+        if self.ga is None:
+            return torch.mean(torch.abs(pred - label))
+        else:
+            return torch.mean((self.ga.norm(pred - label)))
