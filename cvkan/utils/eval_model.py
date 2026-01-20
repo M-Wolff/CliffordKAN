@@ -14,6 +14,18 @@ from icecream import ic
 
 from cvkan.models.CliffordKAN import CliffordKAN
 
+def batched_forward(model, data, batch_size=500):
+    predictions = []
+    with torch.no_grad():
+        for i in range(0, len(data), batch_size):
+            batch_input = data[i:i+batch_size]
+            pred = model(batch_input)
+            predictions.append(pred)
+    return torch.cat(predictions, dim=0)
+
+
+
+
 def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_label, add_softmax_lastlayer):
     """
     Evaluates a given model on given train and test data as well as ground-truth labels using a dictionary of loss functions
@@ -31,9 +43,29 @@ def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_labe
     # dictionaries to store train and test losses for all loss functions to evaluate
     train_losses = dict()
     test_losses = dict()
+    model.eval()
     # create predictions for train and test input data
-    train_predictions = model(train_data)
-    test_predictions = model(test_data)
+    #train_predictions = model(train_data)
+    train_predictions = batched_forward(model, train_data)
+    #test_predictions = model(test_data)
+    test_predictions = batched_forward(model, test_data)
+    #ic(test_predictions.shape)
+    #ic(test_data.shape)
+    #ic(test_predictions.mean())
+    #ic(test_predictions.std())
+    #ic(test_data[0:8,...])
+    #ic(test_predictions[0:8,...])
+    #ic(test_label[0:8,...])
+    #ic(train_predictions.shape)
+    #ic(train_data.shape)
+    #ic(train_predictions.mean())
+    #ic(train_predictions.std())
+    #ic(train_data[0:8,...])
+    #ic(train_predictions[0:8,...])
+    #ic(train_label[0:8,...])
+    #diff = (train_label[0:8,...] - train_predictions[0:8,...])
+    #ic(diff)
+    #ic(model.algebra.norm(diff))
     # iterate over all loss functions
     for loss_fn_name, loss_fn in loss_fns.items():
         current_train_label = train_label
