@@ -59,7 +59,7 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["complex"] = convert_model_output_to_real
     results["add_softmax_lastlayer"] = add_softmax_lastlayer
     results["layers"] = model.layers_hidden
-    results["use_norm"] = model.use_norm
+    results["use_norm"] = [_.value for _ in model.use_norm]
     results["num_grids"] = model.num_grids
     results["rho"] = model.rho if hasattr(model, "rho") else None
     results["dataset_name"] = dataset_name
@@ -67,7 +67,8 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["num_trainable_params"] = get_num_parameters(model)
     results["zsilu_type"] = model.csilu_type if hasattr(model, "csilu_type") else None
     results["start_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    results["clifford_extra_args"] = model.clifford_extra_args if isinstance(model, CliffordKAN) else None
+    results["extra_args"] = model.extra_args if hasattr(model, "extra_args") else None
+    results["metric"] = list(model.algebra.metric.tolist()) if hasattr(model, "algebra") else None
 
 
     # iterate over the k folds
@@ -75,6 +76,7 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
         results["train_losses"][i] = dict()
         results["test_losses"][i] = dict()
         my_model = copy.deepcopy(model)  # create a copy of the model
+        my_model.random_init_weights()
         # run training on current fold
         train_loss, test_loss = train_kans(my_model, d, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                                            device=device, batch_size=batch_size, logging_interval=logging_interval,
@@ -106,3 +108,4 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
         all_results.append(results)
         with open(results_file, "w+", encoding="utf-8") as f:
             json.dump(all_results, f)
+    return results
