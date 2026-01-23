@@ -15,15 +15,17 @@ if __name__ == "__main__":
     parser.add_argument("--clifford_rbf", type=str, default=None, help="Type of RBF calculation to use for CliffordKAN. One of {naive,cliffordspace}")
     parser.add_argument("--norm", type=str, default="nonorm", help="Type of Norm to use. Possible values (for cvkan and cliffkan): {batchnorm_comp-wise, batchnorm_node-wise, batchnorm_dim-wise}")
     parser.add_argument("--metric", type=comma_separated_ints, default=None, help="Type of Metric to use. Specify as [a,b,...] with brackets")
+    parser.add_argument("--num_grids", type=int, default=8, help="Number of grid points to use")
 
     args = parser.parse_args()
     print("Running Function Fitting Eperiments for Dataset ", args.dataset, " and Model ", args.model, " and Task ", args.task)
     # check if clifford_grid and clifford_rbf exist, if model is cliffkan or all, otherwise throw error
     if args.model in ["cliffkan", "all"]:
-        assert args.clifford_grid in ["full_grid","independant_grid"], "For Model 'cliffkan' parameter --clifford_grid must be set"
+        assert args.clifford_grid in ["full_grid","independant_grid", "random"], "For Model 'cliffkan' parameter --clifford_grid must be set"
         assert args.clifford_rbf in ["naive","cliffordspace"], "For Model 'cliffkan' parameter --clifford_rbf must be set"
     extra_args = {"clifford_grid": args.clifford_grid, "clifford_rbf": args.clifford_rbf}
     extra_args["norm"] = args.norm
+    extra_args["num_grids"] = args.num_grids
     if args.task == "funcfit":
         run_experiments_funcfitting(run_dataset=args.dataset, run_model=args.model, extra_args=extra_args)
     elif args.task == "physics":
