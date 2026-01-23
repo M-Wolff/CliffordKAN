@@ -44,14 +44,17 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     # build dictionary to store the results into
     results = dict()
     results["train_losses"] = dict()
+    results["val_losses"] = dict()
     results["test_losses"] = dict()
     # mean and std across the k folds
     results["train_losses"]["mean"] = dict()
     results["train_losses"]["std"] = dict()
+    results["val_losses"]["mean"] = dict()
+    results["val_losses"]["std"] = dict()
     results["test_losses"]["mean"] = dict()
     results["test_losses"]["std"] = dict()
     results["model_name"] = model.__class__.__name__
-    results["dataset_size"] = dataset_full_train.get_train_test_size()
+    results["dataset_size"] = dataset_full_train.get_train_val_test_size()
     # make sure loss_fn_backprop is a class and not just a lambda or method.
     results["loss_fn_backprop"] = loss_fn_backprop.__class__.__name__
     results["batch_size"] = batch_size
@@ -74,25 +77,30 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     # iterate over the k folds
     for i, d in enumerate(datasets):
         results["train_losses"][i] = dict()
+        results["val_losses"][i] = dict()
         results["test_losses"][i] = dict()
         my_model = copy.deepcopy(model)  # create a copy of the model
         my_model.random_init_weights()
         # run training on current fold
-        train_loss, test_loss = train_kans(my_model, d, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
+        train_loss, val_loss, test_loss = train_kans(my_model, d, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                                            device=device, batch_size=batch_size, logging_interval=logging_interval,
                                            add_softmax_lastlayer=add_softmax_lastlayer, epochs=epochs,
                                            last_layer_output_real=convert_model_output_to_real)
         # and store results for each loss_fn given
         for k in loss_fns.keys():
             results["train_losses"][i][k] = train_loss[k].item()
+            results["val_losses"][i][k] = val_loss[k].item()
             results["test_losses"][i][k] = test_loss[k].item()
 
     # calculate mean and std for all loss_fn's given
     for k in loss_fns.keys():
         train_losses_per_function = np.array([results["train_losses"][i][k] for i in range(num_folds)])
+        val_losses_per_function = np.array([results["val_losses"][i][k] for i in range(num_folds)])
         test_losses_per_function = np.array([results["test_losses"][i][k] for i in range(num_folds)])
         results["train_losses"]["mean"][k] = np.mean(train_losses_per_function)
         results["train_losses"]["std"][k] = np.std(train_losses_per_function)
+        results["val_losses"]["mean"][k] = np.mean(val_losses_per_function)
+        results["val_losses"]["std"][k] = np.std(val_losses_per_function)
         results["test_losses"]["mean"][k] = np.mean(test_losses_per_function)
         results["test_losses"]["std"][k] = np.std(test_losses_per_function)
     results["finish_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
