@@ -10,23 +10,25 @@ import sklearn
 import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
-from icecream import ic
 
 from cvkan.models.CliffordKAN import CliffordKAN
 
-def batched_forward(model, data, batch_size=500):
+def batched_forward(model, data, batch_size):
     predictions = []
     with torch.no_grad():
         for i in range(0, len(data), batch_size):
             batch_input = data[i:i+batch_size]
             pred = model(batch_input)
             predictions.append(pred)
-    return torch.cat(predictions, dim=0)
+    if len(predictions) > 0:
+        return torch.cat(predictions, dim=0)
+    else:
+        return None
 
 
 
 
-def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_label, add_softmax_lastlayer):
+def eval_model(model, loss_fns, *, data_dict, add_softmax_lastlayer, batch_size, splits_to_eval, device="cuda"):
     """
     Evaluates a given model on given train and test data as well as ground-truth labels using a dictionary of loss functions
     :param model: model to evaluate
@@ -37,65 +39,49 @@ def eval_model(model, loss_fns, *, train_data, test_data, train_label, test_labe
     :param test_label: test ground truth labels (no batching)
     :param add_softmax_lastlayer: whether softmax should be applied after the last layer before evaluation of loss functions
     (CE loss named 'cross_entropy' will ignore this value and always receive raw logits)
+    :param batch_size: Batch-Size used for forward pass
+    :param splits_to_val: List which can contain multiple of the following: {'train', 'val', 'test'}
     :return: Tuple of two dictionaries (train_losses, test_losses) that each have the names of the loss functions
     evaluated as keys and the resulting value of each loss function as value.
     """
     # dictionaries to store train and test losses for all loss functions to evaluate
-    train_losses = dict()
-    test_losses = dict()
+    losses = dict()
     model.eval()
-    # create predictions for train and test input data
-    #train_predictions = model(train_data)
-    train_predictions = batched_forward(model, train_data)
-    #test_predictions = model(test_data)
-    test_predictions = batched_forward(model, test_data)
-    #ic(test_predictions.shape)
-    #ic(test_data.shape)
-    #ic(test_predictions.mean())
-    #ic(test_predictions.std())
-    #ic(test_data[0:8,...])
-    #ic(test_predictions[0:8,...])
-    #ic(test_label[0:8,...])
-    #ic(train_predictions.shape)
-    #ic(train_data.shape)
-    #ic(train_predictions.mean())
-    #ic(train_predictions.std())
-    #ic(train_data[0:8,...])
-    #ic(train_predictions[0:8,...])
-    #ic(train_label[0:8,...])
-    #diff = (train_label[0:8,...] - train_predictions[0:8,...])
-    #ic(diff)
-    #ic(model.algebra.norm(diff))
-    # iterate over all loss functions
-    for loss_fn_name, loss_fn in loss_fns.items():
-        current_train_label = train_label
-        current_test_label = test_label
-        current_train_preds = train_predictions
-        current_test_preds = test_predictions
-        # if loss function is CE, accuracy, F1 or precision and model output is complex
-        if loss_fn_name in ["cross_entropy", "accuracy", "f1", "precision"]:
-            if torch.is_complex(train_predictions):
-                # only use real parts
-                current_train_preds = train_predictions.real
-                current_test_preds = test_predictions.real
-            elif isinstance(model, CliffordKAN):
-                current_train_preds = train_predictions[...,0]
-                current_test_preds = test_predictions[...,0]
-        # if softmax should be applied (and loss function is not CE; CE requires raw logits)
-        if add_softmax_lastlayer and loss_fn_name != "cross_entropy":
-            # apply softmax
-            current_train_preds = torch.nn.functional.softmax(current_train_preds, dim=1)
-            current_test_preds = torch.nn.functional.softmax(current_test_preds, dim=1)
-        # some loss functions require argmax and not softmax values
-        if loss_fn_name in ["accuracy", "f1", "precision"]:
-            current_train_label = torch.argmax(current_train_label, dim=1)
-            current_test_label = torch.argmax(current_test_label, dim=1)
-            current_train_preds = torch.argmax(current_train_preds, dim=1)
-            current_test_preds = torch.argmax(current_test_preds, dim=1)
-        # insert train and test losses into the dictionaries with key = name of loss function
-        train_losses[loss_fn_name] = loss_fn(current_train_preds, current_train_label)
-        test_losses[loss_fn_name] = loss_fn(current_test_preds, current_test_label)
-    return train_losses, test_losses
+    for split in splits_to_eval:
+        losses[split] = dict()
+        # create predictions for current split
+        data = data_dict[f"{split}_input"]
+        data = data.to(device)
+        predictions = batched_forward(model, data, batch_size=batch_size)
+        label = data_dict[f"{split}_label"]
+        label = label.to(device)
+        # maybe split is empty, then also make predictions empty with matching size
+        if predictions is None:
+            predictions = torch.zeros((0,) + label.shape[1:])
+            predictions = predictions.to(device)
+        # iterate over all loss functions
+        for loss_fn_name, loss_fn in loss_fns.items():
+            # Create clones of everything because some operations might change them in-place
+            current_predictions = predictions.clone()
+            current_label = label.clone()
+            # if loss function is CE, accuracy, F1 or precision and model output is complex
+            if loss_fn_name in ["cross_entropy", "accuracy", "f1", "precision"]:
+                if torch.is_complex(current_predictions):
+                    # only use real parts
+                    current_predictions = predictions.real
+                elif isinstance(model, CliffordKAN):
+                    current_predictions = current_predictions[...,0]
+            # if softmax should be applied (and loss function is not CE; CE requires raw logits)
+            if add_softmax_lastlayer and loss_fn_name != "cross_entropy":
+                # apply softmax
+                current_predictions = torch.nn.functional.softmax(current_predictions, dim=1)
+            # some loss functions require argmax and not softmax values
+            if loss_fn_name in ["accuracy", "f1", "precision"]:
+                current_label = torch.argmax(current_label, dim=1)
+                current_predictions = torch.argmax(current_predictions, dim=1)
+            # insert train and test losses into the dictionaries with key = name of loss function
+            losses[split][loss_fn_name] = loss_fn(current_predictions, current_label)
+    return losses
 
 def plot_confusion_matrix(pred, gt, labelmapping=None):
     """
