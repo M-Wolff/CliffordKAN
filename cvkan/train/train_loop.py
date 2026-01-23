@@ -63,7 +63,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                                     add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train", "val", "test"])
         for split in losses.keys():
             print(f"Final {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
-        return losses["train"], losses["val"], losses["test"]
+        return losses["train"], losses["val"], losses["test"], None
     # if model is not PyKAN Wrapper, check if batch_size is > 0 (for pykan batch size should be -1)
     assert batch_size > 0, f"Model {type(model)} has Batch-Size {batch_size} <= 0!"
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
@@ -76,6 +76,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     early_stopper = EarlyMinStopper(patience=200, threshold=0.01)
 
     # train loop
+    epoch = 0  # not neccessary at all but makes LanguageServer happy :)
     for epoch in range(epochs):
         if early_stopper.should_stop():
             print(f"Stopping training due to EarlyStopper at epoch {epoch}")
@@ -125,4 +126,5 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                                            add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train","val", "test"])
     for split in losses.keys():
         print(f"Final {split} Losses: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
-    return losses["train"], losses["val"], losses["test"]
+    extra_infos = {"final_epoch": epoch, "final_lr": scheduler.get_last_lr()}
+    return losses["train"], losses["val"], losses["test"], extra_infos

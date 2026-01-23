@@ -71,6 +71,7 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     results["zsilu_type"] = model.csilu_type if hasattr(model, "csilu_type") else None
     results["start_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     results["extra_args"] = model.extra_args if hasattr(model, "extra_args") else None
+    results["extra_infos"] = {}  # final LR, epochs trained, ...
     results["metric"] = list(model.algebra.metric.tolist()) if hasattr(model, "algebra") else None
 
 
@@ -82,10 +83,11 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
         my_model = copy.deepcopy(model)  # create a copy of the model
         my_model.random_init_weights()
         # run training on current fold
-        train_loss, val_loss, test_loss = train_kans(my_model, d, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
+        train_loss, val_loss, test_loss, extra_infos = train_kans(my_model, d, loss_fn_backprop=loss_fn_backprop, loss_fns=loss_fns,
                                            device=device, batch_size=batch_size, logging_interval=logging_interval,
                                            add_softmax_lastlayer=add_softmax_lastlayer, epochs=epochs,
                                            last_layer_output_real=convert_model_output_to_real)
+        results["extra_infos"][i] = extra_infos
         # and store results for each loss_fn given
         for k in loss_fns.keys():
             results["train_losses"][i][k] = train_loss[k].item()
