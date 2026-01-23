@@ -10,38 +10,41 @@ from cvkan.utils.dataloading.csv_dataloader import CSVDataset
 def split_crossval(dataset: CSVDataset, k=5):
     """
 
-    :param dataset: CSVDataset dataset with 100% train split
+    :param dataset: CSVDataset dataset with train data, possibly test data (will not change) and **empty** val split
     :param k: number of folds to do
     :return: list of k datasets, each element representing one fold.
     """
-    assert dataset.get_train_test_size()[1] == 0, "For automatic crossvalidation splitting the test set should be empty (100% train)"
-    dataset_size = dataset.get_train_test_size()[0]
+    num_train, num_val, num_test = dataset.get_train_val_test_size()
+    assert num_val == 0, "Val Split needs to be empty for crossval splitter"
     crossval_datasets = []
     # loop over all possible split points (0,1,2,...,k-1)
     for split in range(k):
-        # calculate test start and end indices
-        test_start_index = split * (dataset_size//k)
-        test_end_index = (split + 1) * (dataset_size//k)
+        # calculate val start and end indices
+        val_start_index = split * (num_train//k)
+        val_end_index = (split + 1) * (num_train//k)
         # create new dataset dictionary
         data = dict()
-        # copy test set from original dataset for current fold based on previously calculated range of indices
-        data["test_input"] = dataset.data["train_input"][test_start_index:test_end_index]
-        data["test_label"] = dataset.data["train_label"][test_start_index:test_end_index]
-        # if test split is surrounded by train data
-        if test_start_index > 0 and test_end_index < dataset_size:
+        # copy test set from original dataset for current fold
+        data["test_input"] = dataset.data["test_input"]
+        data["test_label"] = dataset.data["test_label"]
+        # copy val set from original train dataset for current fold based on previously calculated range of indices
+        data["val_input"] = dataset.data["train_input"][val_start_index:val_end_index]
+        data["val_label"] = dataset.data["train_label"][val_start_index:val_end_index]
+        # if val split is surrounded by train data
+        if val_start_index > 0 and val_end_index < num_train:
             # copy data before and after the test split into the train split
-            data["train_input"] = torch.cat((dataset.data["train_input"][0:test_start_index], dataset.data["train_input"][test_end_index:dataset_size, :]))
-            data["train_label"] = torch.cat((dataset.data["train_label"][0:test_start_index], dataset.data["train_label"][test_end_index:dataset_size, :]))
-        # if test split is the last split
-        elif test_start_index > 0 and test_end_index == dataset_size:
-            # copy eberything before test split to train split
-            data["train_input"] = dataset.data["train_input"][0:test_start_index, :]
-            data["train_label"] = dataset.data["train_label"][0:test_start_index, :]
-        # if test split is the first split
-        elif test_start_index == 0 and test_end_index != dataset_size:
+            data["train_input"] = torch.cat((dataset.data["train_input"][0:val_start_index], dataset.data["train_input"][val_end_index:num_train, :]))
+            data["train_label"] = torch.cat((dataset.data["train_label"][0:val_start_index], dataset.data["train_label"][val_end_index:num_train, :]))
+        # if val split is the last split
+        elif val_start_index > 0 and val_end_index == num_train:
+            # copy everything before val split to train split
+            data["train_input"] = dataset.data["train_input"][0:val_start_index, :]
+            data["train_label"] = dataset.data["train_label"][0:val_start_index, :]
+        # if val split is the first split
+        elif val_start_index == 0 and val_end_index != num_train:
             # copy everything after test split to train split
-            data["train_input"] = dataset.data["train_input"][test_end_index:, :]
-            data["train_label"] = dataset.data["train_label"][test_end_index:, :]
+            data["train_input"] = dataset.data["train_input"][val_end_index:, :]
+            data["train_label"] = dataset.data["train_label"][val_end_index:, :]
         # create a CSVDataset object out of the constructed dictionary, copying varnames
         ds = CSVDataset(data, input_vars=dataset.input_varnames, output_vars=dataset.output_varnames, categorical_vars=dataset.categorical_vars)
         # set attribute num_classes the same as in the original datasets, if exists
