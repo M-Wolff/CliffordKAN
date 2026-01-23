@@ -181,6 +181,7 @@ class CliffordKANLayer(torch.nn.Module):
         elif self.extra_args["clifford_rbf"]=="cliffordspace":
             result = torch.exp(-(self.algebra.norm(x - self.grid)) ** 2 / self.rho)
             #result = torch.stack([result, torch.zeros_like(result)], dim=-1)  # after norm and exp last dimension is always 1, fill up to make it clifford-valued again
+            result = result.unsqueeze(dim=-1)  # algebra.embed(...) requires last dim to already exist
             result = self.algebra.embed(result, tensor_index=torch.tensor([0]))
             if self.extra_args["clifford_grid"] == "full_grid":
                 # multiply by (x-self.grid) in clifford space # TODO check if this is correct
