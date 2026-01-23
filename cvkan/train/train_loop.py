@@ -4,17 +4,17 @@ Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
 Description: Main loop for training all kinds of KANs on any dataset with arbitrary loss functions
 """
 import torch
+from torch.utils import data
 from torch.utils.data import DataLoader
 from icecream import ic
 
 from cvkan.models.CliffordKAN import CliffordKAN
+from cvkan.utils.early_stopping import EarlyMinStopper
 
 from ..models.wrapper import PyKANWrapper 
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
 from ..utils.misc import get_num_parameters
-
-torch._logging.set_logs(graph_code=True)
 
 def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=torch.device("cuda"), epochs=5000,
                batch_size=1000, kan_explainer=None, logging_interval=50, add_softmax_lastlayer=False, last_layer_output_real=True, sparsify=False):
@@ -37,10 +37,11 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     :return: resulting train and test losses at the very end of training. Both of them are a dict with keys representing the
     name of the loss function (same as keys in parameter 'loss_fns')
     """
-    # __getitem__ of dataset should give elements from train split
-    dataset.set_returnsplit("train")
     # move model to correct device
     model.to(device)
+    loss_fn_backprop_name = [k for k,v in loss_fns.items() if v == loss_fn_backprop]
+    assert len(loss_fn_backprop_name) == 1
+    loss_fn_backprop_name = loss_fn_backprop_name[0]
     if type(model) == PyKANWrapper:  # pyKAN (needs to be wrapper, because pykan does not store certain attributes by itself...)
         # move dataset (without batching) to correct device
         dataset.to(device)
@@ -58,35 +59,35 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
         model.fit(dataset=dataset.data, opt="LBFGS", steps=epochs, loss_fn=loss_fn_backprop, batch=batch_size,
                   metrics = [hardcoded_pykan_testloss_metric], display_metrics=["hardcoded_pykan_testloss_metric"])
         # evaluate the trained model on all loss functions
-        train_losses, test_losses = eval_model(model, loss_fns, train_data=dataset.data["train_input"],
-                                    test_data=dataset.data["test_input"],
-                                    train_label=dataset.data["train_label"],
-                                    test_label=dataset.data["test_label"],
-                                    add_softmax_lastlayer=add_softmax_lastlayer)
-        print(
-            f"Final Train Loss: {[(lfn, l.item()) for lfn, l in train_losses.items()]}, Final Test Loss: {[(lfn, l.item()) for lfn, l in test_losses.items()]}")
-        return train_losses, test_losses
+        losses = eval_model(model, loss_fns, data_dict=dataset.data,
+                                    add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train", "val", "test"])
+        for split in losses.keys():
+            print(f"Final {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
+        return losses["train"], losses["val"], losses["test"]
     # if model is not PyKAN Wrapper, check if batch_size is > 0 (for pykan batch size should be -1)
     assert batch_size > 0, f"Model {type(model)} has Batch-Size {batch_size} <= 0!"
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     print("Number of trainable parameters in the model: ", get_num_parameters(model))
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
     # decay learning rate by 0.6 every epochs//10 steps
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
+    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=20)
+    early_stopper = EarlyMinStopper(patience=200, threshold=0.01)
 
     # train loop
     for epoch in range(epochs):
+        if early_stopper.should_stop():
+            print(f"Stopping training due to EarlyStopper at epoch {epoch}")
+            break
         # evaluate without grads
         with torch.no_grad():
             if epoch % logging_interval == 0 and epoch != 0:
-                train_losses, test_losses = eval_model(model, loss_fns, train_data=dataset.data["train_input"].to(device),
-                                                       test_data=dataset.data["test_input"].to(device),
-                                                       train_label=dataset.data["train_label"].to(device),
-                                                       test_label=dataset.data["test_label"].to(device),
-                                                       add_softmax_lastlayer=add_softmax_lastlayer)
-                print(
-                    f"Epoch {epoch} Train Loss: {[(lfn, l.item()) for lfn, l in train_losses.items()]}, Test Loss: {[(lfn, l.item()) for lfn, l in test_losses.items()]}, LR: {scheduler.get_last_lr()}")
+                losses = eval_model(model, loss_fns, data_dict=dataset.data,
+                                                       add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train", "val", "test"])
+                for split in losses.keys():
+                    print(f"Epoch {epoch} {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
+                print(f"LR: {scheduler.get_last_lr()}")
         # iterate over all batches in train dataloader
         model.train()
         for batch, (X, y) in enumerate(dataloader):
@@ -113,33 +114,15 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                     sparsity_regularization += 1*(kan_explainer.get_edge_relevance(k).abs()).sum()
                 train_loss = train_loss + sparsity_regularization
             train_loss.backward()
-            """ DEBUGGING
-            if batch == 0 and epoch % 100 == 0:  # TODO remove this
-                ic(X[0:10,:])
-                ic(train_predictions[0:10,:])
-                ic(y[0:10, :])
-                try:
-                    ic(model.layers[0].realweights.grad)
-                    ic(model.layers[0].complexweights.grad)
-                except Exception as e:
-                    print("fail1", e)
-                    pass
-                try:
-                    ic(model.__dict__)
-                    ic(model.layers[0].weights.grad)
-                except Exception as e:
-                    print("fail2", e)
-                    pass
-                """
             optimizer.step()
             optimizer.zero_grad()
-        scheduler.step()
+        losses = eval_model(model, loss_fns, data_dict=dataset.data, add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["val"])
+        val_losses = losses["val"]
+        scheduler.step(val_losses[loss_fn_backprop_name])
+        early_stopper.step(val_losses[loss_fn_backprop_name])
     # Final evaluation
-    train_losses, test_losses = eval_model(model, loss_fns, train_data=dataset.data["train_input"].to(device),
-                                           test_data=dataset.data["test_input"].to(device),
-                                           train_label=dataset.data["train_label"].to(device),
-                                           test_label=dataset.data["test_label"].to(device),
-                                           add_softmax_lastlayer=add_softmax_lastlayer)
-    print(
-        f"Final Train Loss: {[(lfn, l.item()) for lfn, l in train_losses.items()]}, Final Test Loss: {[(lfn, l.item()) for lfn, l in test_losses.items()]}")
-    return train_losses, test_losses
+    losses = eval_model(model, loss_fns, data_dict=dataset.data,
+                                           add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train","val", "test"])
+    for split in losses.keys():
+        print(f"Final {split} Losses: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
+    return losses["train"], losses["val"], losses["test"]
