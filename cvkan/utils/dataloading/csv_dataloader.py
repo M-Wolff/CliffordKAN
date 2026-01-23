@@ -6,10 +6,10 @@ Description: Dataloader and Dataset-Class for a comma-seperated CSV file or dict
 import pathlib
 from pathlib import Path
 import random
+from icecream import ic
 import pandas
 import torch
 import math
-from torch.utils.data import Dataset
 
 
 class CSVDataset(torch.utils.data.Dataset):
@@ -50,6 +50,8 @@ class CSVDataset(torch.utils.data.Dataset):
             self.data["train_label"] = csv_file["train_label"]
             self.data["test_input"] = csv_file["test_input"]
             self.data["test_label"] = csv_file["test_label"]
+            self.data["val_input"] = csv_file["val_input"]
+            self.data["val_label"] = csv_file["val_label"]
             return  # and return (we are done here in __init__()) !!!
         else:
             raise NotImplementedError(f"Dataset type {type(csv_file)} is not supported")
@@ -113,6 +115,8 @@ class CSVDataset(torch.utils.data.Dataset):
         self.data["test_label"] = self.data["train_label"][indices[math.ceil(train_fraction * len(indices)):]]
         self.data["train_input"] = self.data["train_input"][indices[:math.ceil(train_fraction * len(indices))]]
         self.data["train_label"] = self.data["train_label"][indices[:math.ceil(train_fraction * len(indices))]]
+        self.data["val_input"] = torch.tensor([])
+        self.data["val_label"] = torch.tensor([])
 
     def to(self, device):
         """
@@ -121,16 +125,18 @@ class CSVDataset(torch.utils.data.Dataset):
         """
         if type(device) == str:
             device = torch.device(device)
-        self.data["test_input"] = self.data["test_input"].to(device)
-        self.data["test_label"] = self.data["test_label"].to(device)
         self.data["train_input"] = self.data["train_input"].to(device)
         self.data["train_label"] = self.data["train_label"].to(device)
-    def get_train_test_size(self):
+        self.data["val_input"] = self.data["val_input"].to(device)
+        self.data["val_label"] = self.data["val_label"].to(device)
+        self.data["test_input"] = self.data["test_input"].to(device)
+        self.data["test_label"] = self.data["test_label"].to(device)
+    def get_train_val_test_size(self):
         """
         Get train and test size (number of samples)
         :return: Tuple (train_size, test_size)
         """
-        return self.data["train_input"].size()[0], self.data["test_input"].size()[0]
+        return self.data["train_input"].size()[0], self.data["val_input"].size()[0], self.data["test_input"].size()[0]
 
     def __or__(self, other):
         """
@@ -143,26 +149,33 @@ class CSVDataset(torch.utils.data.Dataset):
         assert other.output_varnames == self.output_varnames, "Can only unite datasets with same output_varnames"
         assert other.categorical_vars == self.categorical_vars, "Can only unite datasets with same categorical_vars"
         # calculate new number of samples in train and test split (add them together)
-        new_train_length = self.get_train_test_size()[0] + other.get_train_test_size()[0]
-        new_test_length = self.get_train_test_size()[1] + other.get_train_test_size()[1]
+        new_train_length = self.get_train_val_test_size()[0] + other.get_train_val_test_size()[0]
+        new_val_length = self.get_train_val_test_size()[1] + other.get_train_val_test_size()[1]
+        new_test_length = self.get_train_val_test_size()[2] + other.get_train_val_test_size()[2]
 
-        print(f"Joining Dataset of size {self.get_train_test_size()} with Dataset of size {other.get_train_test_size()}...")
+        print(f"Joining Dataset of size {self.get_train_val_test_size()} with Dataset of size {other.get_train_val_test_size()}...")
         print("Be careful that all categorical values have the same corresponding codes!")
         # create placeholders for the joined dataset's samples
         new_train_input =torch.zeros(size=(new_train_length, len(self.input_varnames)), dtype=torch.float32)
         new_train_label=torch.zeros(size=(new_train_length, len(self.output_varnames)), dtype=torch.float32)
+        new_val_input =torch.zeros(size=(new_val_length, len(self.input_varnames)), dtype=torch.float32)
+        new_val_label=torch.zeros(size=(new_val_length, len(self.output_varnames)), dtype=torch.float32)
         new_test_input =torch.zeros(size=(new_test_length, len(self.input_varnames)), dtype=torch.float32)
         new_test_label=torch.zeros(size=(new_test_length, len(self.output_varnames)), dtype=torch.float32)
 
         # copy everything from self to new dataset
         new_train_input[0:self.data["train_input"].size()[0], :] = self.data["train_input"]
         new_train_label[0:self.data["train_label"].size()[0], :] = self.data["train_label"]
+        new_val_input[0:self.data["val_input"].size()[0], :] = self.data["val_input"]
+        new_val_label[0:self.data["val_label"].size()[0], :] = self.data["val_label"]
         new_test_input[0:self.data["test_input"].size()[0], :] = self.data["test_input"]
         new_test_label[0:self.data["test_label"].size()[0], :] = self.data["test_label"]
 
         # add every sample from 'other' to new dataset
         new_train_input[self.data["train_input"].size()[0]:, :] = other.data["train_input"]
         new_train_label[self.data["train_label"].size()[0]:, :] = other.data["train_label"]
+        new_val_input[self.data["val_input"].size()[0]:, :] = other.data["val_input"]
+        new_val_label[self.data["val_label"].size()[0]:, :] = other.data["val_label"]
         new_test_input[self.data["test_input"].size()[0]:, :] = other.data["test_input"]
         new_test_label[self.data["test_label"].size()[0]:, :] = other.data["test_label"]
 
@@ -170,66 +183,66 @@ class CSVDataset(torch.utils.data.Dataset):
         joined_dataset = dict()
         joined_dataset["train_input"] = new_train_input
         joined_dataset["train_label"] = new_train_label
+        joined_dataset["val_input"] = new_val_input
+        joined_dataset["val_label"] = new_val_label
         joined_dataset["test_input"] = new_test_input
         joined_dataset["test_label"] = new_test_label
         joined_dataset = CSVDataset(joined_dataset, self.input_varnames, self.output_varnames, self.categorical_vars)
         joined_dataset.returnsplit = self.returnsplit
-        if hasattr(self.num_classes):
+        if hasattr(self, "num_classes"):
             joined_dataset.num_classes = self.num_classes
         joined_dataset.tasktype = self.tasktype
-        print(f"Joined Dataset has size {joined_dataset.get_train_test_size()} (Train, Test)")
+        print(f"Joined Dataset has size {joined_dataset.get_train_val_test_size()} (Train, Test)")
         return joined_dataset
 
+    def get_train_split(self):
+        return self.data["train_input"], self.data["train_label"]
+    def get_val_split(self):
+        return self.data["val_input"], self.data["val_label"]
+    def get_test_split(self):
+        return self.data["test_input"], self.data["test_label"]
 
     def __len__(self):
         """
-        Get length of dataset
+        Get length of dataset (train split). If you want to access other splits, do so via the .get_val_split() or .get_test_split() methods.
         :return: length of dataset
         """
-        # return length for selected split
-        if self.returnsplit == "train":
-            return self.data["train_input"].size()[0]
-        elif self.returnsplit == "test":
-            return self.data["test_input"].size()[0]
+        return self.data["train_input"].size()[0]
     def __getitem__(self, index):
         """
         Get sample at index 'index'
         :param index: index to get sample from
         :return: sample as a tuple (x,y)
         """
-        # return sample from selected split
-        if self.returnsplit == "train":
-            return self.data["train_input"][index], self.data["train_label"][index]
-        if self.returnsplit == "test":
-            return self.data["test_input"][index], self.data["test_label"][index]
-    def set_returnsplit(self, return_split):
-        """
-        Update the dataset's split to return when used in a dataloader
-        :param return_split: new returnsplit. Either 'train' or 'test'
-        """
-        self.returnsplit = return_split
+        return self.data["train_input"][index], self.data["train_label"][index]
     def normalize(self):
         """Scale and shift each feature seperately so that all values of that feature fall in range  [-2, 2]"""
         # iterate over all features
         for i, feature_name in enumerate(self.input_varnames):
-            # collect mins and maxs across both train and test split, if each not empty
+            # collect mins and maxs across all splits
             mins = []
             maxs = []
-            # Train and Test set might be empty
-            if self.get_train_test_size()[1] > 0:
-                mins.append(torch.amin(self.data["test_input"][:,i]))
-                maxs.append(torch.amax(self.data["test_input"][:, i]))
-            if self.get_train_test_size()[0] > 0:
+            # Train, Val and Test set might be empty
+            num_train, num_val, num_test = self.get_train_val_test_size()
+            if num_train > 0:
                 mins.append(torch.amin(self.data["train_input"][:,i]))
                 maxs.append(torch.amax(self.data["train_input"][:, i]))
+            if num_val > 0:
+                mins.append(torch.amin(self.data["val_input"][:,i]))
+                maxs.append(torch.amax(self.data["val_input"][:, i]))
+            if num_test > 0:
+                mins.append(torch.amin(self.data["test_input"][:,i]))
+                maxs.append(torch.amax(self.data["test_input"][:, i]))
             min_ = torch.min(torch.Tensor(mins))
             max_ = torch.max(torch.Tensor(maxs))
             # scale so that current feature covers interval [-2, 2] completely (i.e. shift so that new min is zero,
             # then scale to [0, 1] and then re-scale to [-2, 2]
-            if self.get_train_test_size()[1] > 0:
-                self.data["test_input"][:, i] = (self.data["test_input"][:, i] - min_) / (max_ - min_) * 4 - 2
-            if self.get_train_test_size()[0] > 0:
+            if num_train > 0:
                 self.data["train_input"][:,i] = (self.data["train_input"][:,i] - min_) / (max_ - min_) * 4 - 2
+            if num_val > 0:
+                self.data["val_input"][:,i] = (self.data["val_input"][:,i] - min_) / (max_ - min_) * 4 - 2
+            if num_test > 0:
+                self.data["test_input"][:, i] = (self.data["test_input"][:, i] - min_) / (max_ - min_) * 4 - 2
     def normalize_for_pykan(self):
         """
         Normalize dataset for pyKAN, which expects dataset to have std of 1 and mean of zero.
@@ -238,5 +251,7 @@ class CSVDataset(torch.utils.data.Dataset):
         std_train = torch.std(self.data["train_input"], dim=0)
 
         self.data["train_input"] = (self.data["train_input"] - mean_train) / std_train
-        if self.get_train_test_size()[1] > 0:
+        if self.get_train_val_test_size()[1] > 0:
+            self.data["val_input"] = (self.data["val_input"] - mean_train) / std_train
+        if self.get_train_val_test_size()[2] > 0:
             self.data["test_input"] = (self.data["test_input"] - mean_train) / std_train
