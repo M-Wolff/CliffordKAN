@@ -7,11 +7,7 @@ Description: Clifford-KAN Model definition
 """
 from typing import List
 import torch
-#from torch_ga import GeometricAlgebra
 from torch_ga.clifford import CliffordAlgebra
-#from torch_ga.clifford import GeometricAlgebra
-from icecream import ic
-ic.configureOutput(includeContext=True)
 from ..utils.norm_functions import ComponentwiseBatchNorm1d, NodewiseBatchNorm1d, DimensionwiseBatchNorm1d, Norms
 
 def create_gridnd_full(grid_min, grid_max, num_grids, num_dim):
@@ -33,6 +29,13 @@ def create_gridnd_independent(num_dim, grid_min, grid_max, num_grids):
     # create grid (linspace from grid_min to grid_max consisting of num_grids grid points)
     # then add one more dimension (not just a view!) to have a grid per dimension of CA / GA
     grid = torch.linspace(grid_min, grid_max, num_grids).unsqueeze(-1).repeat(1, num_dim)
+    return grid
+
+def create_gridnd_random(num_dim, grid_min, grid_max, num_gridpoints_total):
+    grid_range = grid_max - grid_min
+    sobol = torch.quasirandom.SobolEngine(dimension=num_dim, scramble=True)
+    grid = sobol.draw(num_gridpoints_total) * grid_range + grid_min
+    #grid = torch.rand((num_gridpoints_total, num_dim)) * grid_range + grid_min
     return grid
 
 def create_grid2d_full(grid_min, grid_max, num_grids):
@@ -104,6 +107,10 @@ class CliffordKANLayer(torch.nn.Module):
             grid = create_gridnd_full(grid_min, grid_max, num_grids, self.num_dim)
         elif self.extra_args["clifford_grid"] == "independant_grid":
             grid = create_gridnd_independent(self.num_dim,grid_min, grid_max, num_grids)
+        elif self.extra_args["clifford_grid"] == "random":
+            grid = create_gridnd_random(num_dim=self.num_dim, grid_min=grid_min, grid_max=grid_max, num_gridpoints_total=num_grids)
+        else:
+            raise NotImplementedError(f"Grid-Type {self.extra_args['clifford_grid']} is not supported!")
 
         self.grid = torch.nn.Parameter(grid, requires_grad=False)
         
@@ -129,8 +136,12 @@ class CliffordKANLayer(torch.nn.Module):
             self.weights = torch.nn.Parameter(torch.randn(size=((self.input_dim, self.output_dim,) + self.num_dim*(self.num_grids,)+ (self.num_dim,))), requires_grad=True)
             #self.weights = torch.nn.Parameter(torch.zeros(size=((input_dim, output_dim,) + self.num_dim*(self.num_grids,)+ (self.num_dim,))), requires_grad=True)
             # self.weights now is [I,O, (num_grids)**num_dims, num_dims)
-        elif self.extra_args["clifford_grid"] == "independant_grid":
+        elif self.extra_args["clifford_grid"] in ["independant_grid", "random"]:
             self.weights = torch.nn.Parameter(torch.randn(size=(self.input_dim, self.output_dim, self.num_grids,self.num_dim)), requires_grad=True)  # for clifford kan independant dims
+
+        if self.extra_args["clifford_grid"] == "random":  # maybe also resample grid
+            grid = create_gridnd_random(num_dim=self.num_dim, grid_min=self.grid_min, grid_max=self.grid_max, num_gridpoints_total=self.num_grids)
+            self.grid = torch.nn.Parameter(grid, requires_grad=False)
         if orig_device is not None:
             self.to(orig_device)
 
@@ -148,7 +159,7 @@ class CliffordKANLayer(torch.nn.Module):
                 x = x.unsqueeze(-2)
             x = x.expand(*new_shape)
             #x = torch.permute(x, dims=(0,1,3,4,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
-        elif self.extra_args["clifford_grid"] == "independant_grid":
+        elif self.extra_args["clifford_grid"] in ["independant_grid", "random"]:
             x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
             x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
         # i and o are input and output indices within layer layer_idx and layer_ix+1
@@ -163,7 +174,7 @@ class CliffordKANLayer(torch.nn.Module):
                 slice_dims += [0] * (x.ndim - 3)
                 slice_dims += [slice(None)]
                 x = x[tuple(slice_dims)]
-            elif self.extra_args["clifford_grid"] == "independant_grid":
+            elif self.extra_args["clifford_grid"] in ["independant_grid", "random"]:
                 result = torch.einsum("big,iogx->biox", result, self.weights)
                 x = x[:,:,0,:]
 
@@ -180,7 +191,7 @@ class CliffordKANLayer(torch.nn.Module):
                 slice_dims += [0] * (x.ndim - 3)
                 slice_dims += [slice(None)]
                 x = x[tuple(slice_dims)]
-            elif self.extra_args["clifford_grid"] == "independant_grid":
+            elif self.extra_args["clifford_grid"] in ["independant_grid", "random"]:
                 # multiply by (x-self.grid) in clifford space # TODO check if this is correct
                 result = torch.einsum("bigx,bigy,xyz->bigz", result, (x-self.grid), self.cayley)  # clifford independant dimensions
                 # Intention: result = torch.einsum("bidg,iodg->bod", result, self.weights)
