@@ -72,9 +72,11 @@ def create_complex_dataset(f, n_var, ranges, train_num=1000, test_num=1000, devi
         # build dataset
         dataset = {}
         dataset['train_input'] = train_input.to(device)
+        dataset["val_input"] = torch.tensor([])
         dataset['test_input'] = test_input.to(device)
 
         dataset['train_label'] = train_label.to(device)
+        dataset['val_label'] = torch.tensor([])
         dataset['test_label'] = test_label.to(device)
         save_dataset(dataset_dict=dataset, filepath=filepath_save)
     return dataset
