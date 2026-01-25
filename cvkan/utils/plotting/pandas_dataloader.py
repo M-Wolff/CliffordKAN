@@ -37,7 +37,10 @@ def load_json_make_pandas(json_path: Path):
     for experiment in data:
         experiment_dict_flat = flatten_dict(experiment) 
         for k in flattened_keys:
-            if k == "use_norm":
+            if k not in experiment_dict_flat:
+                print(f"Skipping key {k} for model {experiment_dict_flat['model_name']}")
+                val_to_append = None
+            elif k == "use_norm":
                 val_to_append = experiment_dict_flat[k][0]
             elif k == "layers":
                 val_to_append = ",".join(map(str, experiment_dict_flat[k]))
