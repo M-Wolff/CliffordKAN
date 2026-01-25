@@ -4,9 +4,7 @@ Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
 Description: Main loop for training all kinds of KANs on any dataset with arbitrary loss functions
 """
 import torch
-from torch.utils import data
 from torch.utils.data import DataLoader
-from icecream import ic
 
 from cvkan.models.CliffordKAN import CliffordKAN
 from cvkan.utils.early_stopping import EarlyMinStopper
@@ -72,8 +70,8 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
     # decay learning rate by 0.6 every epochs//10 steps
     #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=20)
-    early_stopper = EarlyMinStopper(patience=200, threshold=0.01)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=20, threshold=0.001)
+    early_stopper = EarlyMinStopper(patience=200, threshold=0.001)
 
     # train loop
     epoch = 0  # not neccessary at all but makes LanguageServer happy :)
@@ -115,6 +113,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                     sparsity_regularization += 1*(kan_explainer.get_edge_relevance(k).abs()).sum()
                 train_loss = train_loss + sparsity_regularization
             train_loss.backward()
+
             optimizer.step()
             optimizer.zero_grad()
         losses = eval_model(model, loss_fns, data_dict=dataset.data, add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["val"])
@@ -126,5 +125,5 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                                            add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train","val", "test"])
     for split in losses.keys():
         print(f"Final {split} Losses: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
-    extra_infos = {"final_epoch": epoch, "final_lr": scheduler.get_last_lr()}
+    extra_infos = {"final_epoch": epoch, "final_lr": scheduler.get_last_lr(), "best_seen_val_loss": float(early_stopper.best_value.item())}
     return losses["train"], losses["val"], losses["test"], extra_infos
