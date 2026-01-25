@@ -19,7 +19,7 @@ class CSVDataset(torch.utils.data.Dataset):
         :param input_vars: names of input variables (list)
         :param output_vars: names of output variables (list)
         :param categorical_vars: list of categorical variables that need to be converted to numeric values
-        :param train_test: share of train and test data given as string 'Train:Test' i.e. '70:30'
+        :param train_test: share of train and test data given as string 'Train:Test' i.e. '70:30'. Only matters for csv_file != dict
         :param shuffle: flag to shuffle randomly before splitting the dataset
         """
         super().__init__()

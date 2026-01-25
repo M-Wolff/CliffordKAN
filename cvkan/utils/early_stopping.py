@@ -1,3 +1,4 @@
+import torch
 class EarlyMinStopper():
     def __init__(self, patience, threshold, logging_interval=50):
         """
@@ -8,7 +9,7 @@ class EarlyMinStopper():
         self.patience = patience
         self.threshold = threshold
         self.steps_without_improvement = 0
-        self.best_value = float("inf")
+        self.best_value = torch.tensor(float("inf"))
         self.stop_criterion_reached = False
         self.logging_interval = logging_interval
     def step(self, value):
