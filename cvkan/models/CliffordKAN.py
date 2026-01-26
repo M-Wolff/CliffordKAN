@@ -165,8 +165,6 @@ class CliffordKANLayer(torch.nn.Module):
         elif self.extra_args["clifford_grid"] in ["independant_grid", "random_grid"]:
             #x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
             #x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
-            #x = x.unsqueeze(-1).expand(x.shape + (self.num_grids,))
-            #x = torch.permute(x, dims=(0,1,3,2))  # switch num_dim and num_grids dimensions (last 2 dimensions)
             x_view = x.view(*x.shape[:-1], 1, x.shape[-1])
         else:
             raise NotImplementedError()
@@ -195,16 +193,16 @@ class CliffordKANLayer(torch.nn.Module):
                 result = torch.einsum("bi...x,bi...y,xyz->bi...z", result, (x_view-self.grid), self.cayley)  # clifford dependant dimensions
                 result = torch.einsum("bi...x,io...y,xyz->bioz", result, self.weights, self.cayley)  # clifford dependant dimensions
                 #x = x[:,:,0,0,:]
-                slice_dims = [slice(None)] * 2
-                slice_dims += [0] * (x.ndim - 3)
-                slice_dims += [slice(None)]
-                x = x[tuple(slice_dims)]
+                #slice_dims = [slice(None)] * 2
+                #slice_dims += [0] * (x.ndim - 3)
+                #slice_dims += [slice(None)]
+                #x = x[tuple(slice_dims)]
             elif self.extra_args["clifford_grid"] in ["independant_grid", "random_grid"]:
                 # multiply by (x-self.grid) in clifford space # TODO check if this is correct
                 result = torch.einsum("bigx,bigy,xyz->bigz", result, (x_view-self.grid), self.cayley)  # clifford independant dimensions
                 # Intention: result = torch.einsum("bidg,iodg->bod", result, self.weights)
                 result = torch.einsum("bigx,iogy,xyz->bioz", result, self.weights, self.cayley)  # clifford independant dimensions
-                x = x[:,:,0,:]
+                #x = x[:,:,0,:]
         assert result.shape[2] == self.output_dim, f"Wrong Output Dimension! Got {result.shape} for Layer with Dimensions[{self.input_dim}, {self.output_dim}]"
         # SiLU
         silu_value = torch.einsum("iox,biy,xyz->bioz", self.silu_weight, self.silu(x), self.cayley)
