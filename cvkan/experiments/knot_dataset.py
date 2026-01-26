@@ -123,7 +123,7 @@ def run_experiments_knot(run_model, extra_args):
     num_grids = extra_args["num_grids"]
     # load knot complex and real-valued with 100% train split
     # use 100% train split because run_crossval expects it this way and splits it into 5 non-overlapping folds
-    knot_dataset_real = load_knot_dataset_real(train_test_split="100:0")
+    knot_dataset_real = load_knot_dataset_real(train_test_split="70:30")
     knot_dataset_complex = convert_knot_real_to_complex(knot_dataset_real)
     knot_dataset_cliff = convert_knot_complex_to_clifford(knot_dataset_complex)
     in_features_complex = len(knot_dataset_complex.input_varnames)
@@ -140,21 +140,20 @@ def run_experiments_knot(run_model, extra_args):
             if run_models[1]:
                 fastkan = FastKAN(layers_hidden=list(arch), num_grids=64, use_batchnorm=True, grid_mins=-2, grid_maxs=2)
                 run_crossval(fastkan, knot_dataset_real, dataset_name="knot_r", loss_fn_backprop=crossentropy_loss, loss_fns=loss_fns, device=_DEVICE,
-                             batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=False)
+                             batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=5000, convert_model_output_to_real=False)
     for arch in [(in_features_complex, 1, num_classes), (in_features_complex, 2, num_classes)]:
             ################################# CVKAN #################################
             if run_models[2]:
                 cvkan = CVKANWrapper(layers_hidden=arch, num_grids=num_grids, rho=1, use_norm=norm_to_use, grid_mins=-2, grid_maxs=2, csilu_type="complex_weight")
                 run_crossval(cvkan, knot_dataset_complex, dataset_name="knot_c", loss_fn_backprop=crossentropy_loss,
                              loss_fns=loss_fns, device=_DEVICE,
-                             batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=True)
+                             batch_size=10000, logging_interval=50, add_softmax_lastlayer=True, epochs=5000, convert_model_output_to_real=True)
             ################################# Clifford-KAN #################################
             if run_models[3]:
                 # TODO metric should not be hardcoded here for later experiments
                 algebra = CliffordAlgebra(metric=[-1], device=_DEVICE)
                 cliffkan = CliffordKAN(layers_hidden=list(arch), algebra=algebra, num_grids=num_grids, rho=1, use_norm=norm_to_use, extra_args=extra_args)
-                run_crossval(cliffkan, knot_dataset_cliff, dataset_name="knot_cliff", loss_fn_backprop=crossentropy_loss,loss_fns=loss_fns, batch_size=10000, logging_interval=50,add_softmax_lastlayer=True, epochs=200, convert_model_output_to_real=True)
-
+                run_crossval(cliffkan, knot_dataset_cliff, dataset_name="knot_cliff", loss_fn_backprop=crossentropy_loss,loss_fns=loss_fns, batch_size=10000, logging_interval=50,add_softmax_lastlayer=True, epochs=5000, convert_model_output_to_real=True)
 
 def train_knot_feature_subset():
     """Training on the Knot Dataset on the most important 3 or 7 features only
