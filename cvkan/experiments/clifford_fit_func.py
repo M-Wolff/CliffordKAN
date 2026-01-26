@@ -80,5 +80,5 @@ def synthetic_clifford(name, metric, extra_args, train_num=80000, test_num=80000
         loss_fns["mse"] = mse_loss
         loss_fns["mae"] = mae_loss
         loss_fn_backprop = loss_fns["mse"]
-        run_crossval(cliffkan, dataset_cliff, dataset_name=f"clifford_{name}_{metric}_{train_num}", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=5000, add_softmax_lastlayer=False, epochs=5000, convert_model_output_to_real=False)
+        run_crossval(cliffkan, dataset_cliff, dataset_name=f"clifford_{name}_{metric}_{train_num}", loss_fn_backprop=loss_fn_backprop,loss_fns=loss_fns, batch_size=2000, add_softmax_lastlayer=False, epochs=5000, convert_model_output_to_real=False)
 
