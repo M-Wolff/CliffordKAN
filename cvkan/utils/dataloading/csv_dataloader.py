@@ -50,8 +50,12 @@ class CSVDataset(torch.utils.data.Dataset):
             self.data["train_label"] = csv_file["train_label"]
             self.data["test_input"] = csv_file["test_input"]
             self.data["test_label"] = csv_file["test_label"]
-            self.data["val_input"] = csv_file["val_input"]
-            self.data["val_label"] = csv_file["val_label"]
+            if "val_input" in csv_file.keys():
+                self.data["val_input"] = csv_file["val_input"]
+                self.data["val_label"] = csv_file["val_label"]
+            else:
+                self.data["val_input"] = torch.tensor([])
+                self.data["val_label"] = torch.tensor([])
             return  # and return (we are done here in __init__()) !!!
         else:
             raise NotImplementedError(f"Dataset type {type(csv_file)} is not supported")
