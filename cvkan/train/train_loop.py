@@ -37,7 +37,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     """
     # move model to correct device
     model.to(device)
-    loss_fn_backprop_name = [k for k,v in loss_fns.items() if v == loss_fn_backprop]
+    loss_fn_backprop_name = [k for k,v in loss_fns.items() if type(v) == type(loss_fn_backprop)]
     assert len(loss_fn_backprop_name) == 1
     loss_fn_backprop_name = loss_fn_backprop_name[0]
     if type(model) == PyKANWrapper:  # pyKAN (needs to be wrapper, because pykan does not store certain attributes by itself...)

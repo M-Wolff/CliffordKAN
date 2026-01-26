@@ -30,6 +30,7 @@ from torch_ga.clifford.algebra import CliffordAlgebra
 _DEVICE = "cuda"
 
 def load_knot_dataset_real(input_filename=Path("/scratch/tmp/m_wolf37/Datasets/knot_theory_invariants.csv"), train_test_split="70:30"):
+#def load_knot_dataset_real(input_filename=Path("/home/matthias/Sciebo/Datasets/knot_theory_invariants.csv"), train_test_split="70:30"):
     """
     Load Knot Dataset from .csv file
     :param input_filename: Path to dataset .csv file
