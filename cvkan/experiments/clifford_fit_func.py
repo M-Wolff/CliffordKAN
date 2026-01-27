@@ -3,7 +3,7 @@ from pathlib import Path
 
 from torch_ga.clifford.algebra import CliffordAlgebra
 
-from cvkan.utils.dataloading.create_complex_dataset import load_dataset, move_dataset_to_device, save_dataset
+from cvkan.utils.dataloading.create_complex_dataset import load_dataset, save_dataset
 from cvkan.utils.dataloading.csv_dataloader import CSVDataset
 from cvkan.models.CliffordKAN import CliffordKAN
 from cvkan.utils.loss_functions import MSE, MAE

@@ -64,7 +64,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
         return losses["train"], losses["val"], losses["test"], None
     # if model is not PyKAN Wrapper, check if batch_size is > 0 (for pykan batch size should be -1)
     assert batch_size > 0, f"Model {type(model)} has Batch-Size {batch_size} <= 0!"
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
     print("Number of trainable parameters in the model: ", get_num_parameters(model))
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)

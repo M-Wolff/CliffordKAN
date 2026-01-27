@@ -18,7 +18,7 @@ def save_dataset(dataset_dict, filepath):
 
 
 def load_dataset(filepath):
-    return torch.load(filepath)
+    return torch.load(filepath, map_location="cpu")
 
 def move_dataset_to_device(dataset_dict, device):
     for k in dataset_dict:
