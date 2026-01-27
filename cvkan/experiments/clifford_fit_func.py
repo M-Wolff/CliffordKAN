@@ -19,7 +19,6 @@ def create_clifford_dataset(name, metric, train_num, test_num):
     if filepath.exists():
         print(f"Using cached dataset {filepath}")
         dataset_dict = load_dataset(filepath)
-        move_dataset_to_device(dataset_dict=dataset_dict, device="cuda")
         return dataset_dict
     
     algebra = CliffordAlgebra(metric=metric)
