@@ -1,11 +1,11 @@
 import torch
 class EarlyMinStopper():
-    def __init__(self, patience, threshold, logging_interval=50):
-        """
+    """
         If EarlyStopper sees no improvement larger than 'threshold' for 'patience' steps, it will return .stop_training() = True
         :param patience: How many steps to tolerate no improvement for
         :param threshold: How big the change needs to be at least to be counted as improvement
-        """
+    """
+    def __init__(self, patience, threshold, logging_interval=50):
         self.patience = patience
         self.threshold = threshold
         self.steps_without_improvement = 0

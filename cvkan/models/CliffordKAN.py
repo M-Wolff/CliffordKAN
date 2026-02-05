@@ -58,9 +58,11 @@ def create_grid2d_full(grid_min, grid_max, num_grids):
     
 
 class CliffordKANLayer(torch.nn.Module):
-    def __init__(self, algebra: CliffordAlgebra, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2, rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", extra_args=None):
+    def __init__(self, algebra: CliffordAlgebra, input_dim: int, output_dim: int, num_grids: int = 8, grid_min = -2, grid_max = 2,
+                 rho=1, use_norm=Norms.BatchNormComponentWise, silu_type="componentwise", extra_args=None):
+
         """
-        :param metric: the Geometric Algebra metric (list[float])
+        :param algebra: the Geometric Algebra to use
         :param input_dim: input dimension size of Layer (Layer Width)
         :param output_dim: output dimension size of Layer (next Layer's Width)
         :param num_grids: number of grid points ***per dimension***
@@ -69,7 +71,7 @@ class CliffordKANLayer(torch.nn.Module):
         :param rho: rho for use in RBF (default rho=1)
         :param use_norm: which Normalization scheme to use
         :param silu_type: the kind of SiLU to use
-        :param use_full_grid: whether to use full grid (i.e. [8^2]) or not (i.e. [8 x 2])
+        :param extra_args: additional args dictionary containing 'metric', 'clifford_rbf' and 'clifford_grid' with respective values
         """
         super().__init__()
         assert extra_args is not None
@@ -107,6 +109,8 @@ class CliffordKANLayer(torch.nn.Module):
             self.num_grids = num_grids
             grid = create_gridnd_full(grid_min, grid_max, num_grids, self.num_dim)
         elif self.extra_args["clifford_grid"] == "independant_grid":
+            # TODO: fix independent grid
+            raise NotImplementedError("Independent grid was not implemented correctly. Fix is WIP")
             self.num_grids = num_grids ** self.num_dim
             grid = create_gridnd_independent(self.num_dim,grid_min, grid_max, self.num_grids)
         elif self.extra_args["clifford_grid"] == "random_grid":
@@ -141,6 +145,8 @@ class CliffordKANLayer(torch.nn.Module):
             # self.weights now is [I,O, (num_grids)**num_dims, num_dims)
         elif self.extra_args["clifford_grid"] in ["independant_grid", "random_grid"]:
             self.weights = torch.nn.Parameter(torch.randn(size=(self.input_dim, self.output_dim, self.num_grids,self.num_dim)), requires_grad=True)  # for clifford kan independant dims
+            # TODO think about this and maybe fix?
+            # self.weight [I, O, Num_Dim, Num_Grids, Num_Dim)
 
         if self.extra_args["clifford_grid"] == "random_grid":  # maybe also resample grid
             grid = create_gridnd_random(num_dim=self.num_dim, grid_min=self.grid_min, grid_max=self.grid_max, num_gridpoints_total=self.num_grids)
