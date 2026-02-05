@@ -66,9 +66,3 @@ def load_json_make_pandas(json_path: Path, filter_option=None):
             results_dict[k].append(val_to_append)
     results_df = pd.DataFrame(results_dict)
     return results_df
-
-
-
-if __name__ == "__main__":
-    res_df = load_json_make_pandas(Path("/home/m_wolf37/Sciebo/Doktorand/Workspace/Alesiani-KANs/CliffordKAN/results_backup.json"))
-    print(res_df)
