@@ -3,12 +3,15 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cvkan"
+name = "clkan"
 dynamic = ["version"]
 description = "Clifford KAN"
 readme = "README.md"
 authors = [
+    { name = "Matthias Wolff", email = "matthias.wolff@uni-muenster.de" },
     { name = "Francesco Alesiani", email = "francesco.alesiani@neclab.eu" },
+    { name = "Christof Duhme", email = "christof.duhme@uni-muenster.de" },
+    { name = "Xiaoyi Jiang", email = "xjiang@uni-muenster.de" },
 ]
 license = { file = "LICENSE" }
 keywords = ["clifford", "KAN", "function"]
@@ -43,13 +46,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/cvkan" # Replace with your actual repo
-Documentation = "https://cvkan.readthedocs.io/"
-Issues = "https://github.com/yourusername/cvkan/issues"
-
-# Define any scripts/entry points for command-line execution
-[project.scripts]
-cvkan = "cvkan.__main__:main" # Assumes a package 'cvkan' with a main function
+Homepage = "https://github.com/M-Wolff/CliffordKAN"
+Documentation = ""
+Issues = "https://github.com/M-Wolff/CliffordKAN/issues"
 
 # -----------------------------------------------------------------------------
 # Tool Configurations
@@ -76,12 +75,8 @@ exclude = '''
 [tool.isort]
 profile = "black"
 line_length = 88
-known_first_party = ["cvkan"]
+known_first_party = ["clkan"]
 sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
-
-# Configuration for Hatch (if you need specific build settings)
-[tool.hatch.version]
-path = "cvkan/__init__.py" # Where the version number is stored
 
 [tool.hatch.build.targets.sdist]
 exclude = [
