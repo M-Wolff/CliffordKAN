@@ -3,12 +3,12 @@ from pathlib import Path
 
 from torch_ga.clifford.algebra import CliffordAlgebra
 
-from cvkan.utils.dataloading.create_complex_dataset import load_dataset, save_dataset
-from cvkan.utils.dataloading.csv_dataloader import CSVDataset
-from cvkan.models.CliffordKAN import CliffordKAN
-from cvkan.utils.loss_functions import MSE, MAE
-from cvkan.experiments.run_crossval import run_crossval
-from cvkan.utils.norm_functions import Norms
+from clkan.utils.dataloading.create_complex_dataset import load_dataset, save_dataset
+from clkan.utils.dataloading.csv_dataloader import CSVDataset
+from clkan.models.CliffordKAN import CliffordKAN
+from clkan.utils.loss_functions import MSE, MAE
+from clkan.experiments.run_crossval import run_crossval
+from clkan.utils.norm_functions import Norms
 
 _DATASET_SAVEDIR = Path(__file__).parent / "generated_datasets"
 _DEVICE = torch.device("cuda")

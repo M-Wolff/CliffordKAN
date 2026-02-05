@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.lines import Line2D
 
-from cvkan.utils.plotting.pandas_dataloader import load_json_make_pandas
+from clkan.utils.plotting.pandas_dataloader import load_json_make_pandas
 
 # =========================
 # CONFIGURATION

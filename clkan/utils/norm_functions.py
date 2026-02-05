@@ -1,6 +1,4 @@
 import torch
-from icecream import ic
-from functorch import vmap
 from enum import Enum
 
 class Norms(Enum):

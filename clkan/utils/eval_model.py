@@ -1,6 +1,5 @@
 """
 File: eval_model.py
-Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
 Description: Methods to evaluate a given model on arbitrary loss functions as well as for plotting a confusion matrix
 for Predictions / GT.
 """

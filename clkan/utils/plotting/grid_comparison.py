@@ -1,7 +1,7 @@
 import torch
 from matplotlib import pyplot as plt
 import numpy as np
-from cvkan.models.CliffordKAN import create_gridnd_full
+from clkan.models.CliffordKAN import create_gridnd_full
 from icecream import ic
 
 grid_points_full = 8

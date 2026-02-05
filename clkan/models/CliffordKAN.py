@@ -2,7 +2,7 @@
 # in 2D: [2,0,0],  PGA [2,0,1], CGA [3,1,0]
 """
 File: CliffordKAN.py
-Author: Matthias Wolff, Francesco Alesiani, Xiaoyi Jiang
+Author: Matthias Wolff, Francesco Alesiani, Christof Duhme, Xiaoyi Jiang
 Description: Clifford-KAN Model definition
 """
 from typing import List

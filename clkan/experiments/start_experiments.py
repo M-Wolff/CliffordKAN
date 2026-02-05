@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
-from cvkan.experiments.clifford_fit_func import synthetic_clifford
-from cvkan.experiments.fit_formulas import run_experiments_funcfitting,run_experiments_physics
-from cvkan.experiments.knot_dataset import run_experiments_knot
+from clkan.experiments.clifford_fit_func import synthetic_clifford
+from clkan.experiments.fit_formulas import run_experiments_funcfitting,run_experiments_physics
+from clkan.experiments.knot_dataset import run_experiments_knot
 def comma_separated_ints(value):
     value = value[1:-1]  # clip away [ ... ] brackets
     return [int(x) for x in value.split(",")]

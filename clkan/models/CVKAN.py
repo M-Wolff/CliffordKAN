@@ -5,7 +5,6 @@ Description: CVKAN Model definition
 """
 from typing import List
 import torch
-from icecream import ic
 
 
 from .functions.CV_LayerNorm import Complex_LayerNorm, Complex_BatchNorm, Complex_BatchNorm_naiv, \

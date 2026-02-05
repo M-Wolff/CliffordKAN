@@ -8,15 +8,15 @@ Description: Experiments for Function Fitting (physically meaningful circuit & h
 import torch
 from kan import create_dataset
 
-from cvkan.experiments.run_crossval import run_crossval
-from cvkan.models.FastKAN import FastKAN
-from cvkan.models.wrapper.CVKANWrapper import CVKANWrapper
-from cvkan.models.wrapper.PyKANWrapper import PyKANWrapper
-from cvkan.utils.dataloading.create_complex_dataset import create_complex_dataset
-from cvkan.utils.dataloading.csv_dataloader import CSVDataset
-from cvkan.utils.loss_functions import MSE, MAE
-from cvkan.utils.norm_functions import Norms
-from cvkan.models.CliffordKAN import CliffordKAN
+from clkan.experiments.run_crossval import run_crossval
+from clkan.models.FastKAN import FastKAN
+from clkan.models.wrapper.CVKANWrapper import CVKANWrapper
+from clkan.models.wrapper.PyKANWrapper import PyKANWrapper
+from clkan.utils.dataloading.create_complex_dataset import create_complex_dataset
+from clkan.utils.dataloading.csv_dataloader import CSVDataset
+from clkan.utils.loss_functions import MSE, MAE
+from clkan.utils.norm_functions import Norms
+from clkan.models.CliffordKAN import CliffordKAN
 
 from torch_ga.clifford.algebra import CliffordAlgebra
 

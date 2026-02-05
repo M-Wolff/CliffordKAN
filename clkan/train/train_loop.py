@@ -1,13 +1,13 @@
 """
 File: train_loop.py
-Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
+Author: Matthias Wolff, Florian Eilers, Christof Duhme, Xiaoyi Jiang
 Description: Main loop for training all kinds of KANs on any dataset with arbitrary loss functions
 """
 import torch
 from torch.utils.data import DataLoader
 
-from cvkan.models.CliffordKAN import CliffordKAN
-from cvkan.utils.early_stopping import EarlyMinStopper
+from clkan.models.CliffordKAN import CliffordKAN
+from clkan.utils.early_stopping import EarlyMinStopper
 
 from ..models.wrapper import PyKANWrapper 
 from ..utils.dataloading.csv_dataloader import CSVDataset

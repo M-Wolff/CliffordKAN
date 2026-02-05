@@ -5,7 +5,7 @@ Description: Convert dataset with 100% train split to k datasets with non-overla
 using k-fold cross-validation
 """
 import torch
-from cvkan.utils.dataloading.csv_dataloader import CSVDataset
+from clkan.utils.dataloading.csv_dataloader import CSVDataset
 
 def split_crossval(dataset: CSVDataset, k=5):
     """

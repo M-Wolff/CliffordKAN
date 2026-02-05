@@ -1,12 +1,11 @@
 """
 File: csv_dataloader.py
-Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
+Author: Matthias Wolff, Francesco Alesiani, Christof Duhme, Xiaoyi Jiang
 Description: Dataloader and Dataset-Class for a comma-seperated CSV file or dictionary
 """
 import pathlib
 from pathlib import Path
 import random
-from icecream import ic
 import pandas
 import torch
 import math

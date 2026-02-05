@@ -1,6 +1,6 @@
 """
 File: loss_functions.py
-Author: Matthias Wolff, Florian Eilers, Xiaoyi Jiang
+Author: Matthias Wolff, Francesco Alesiani, Christof Duhme, Xiaoyi Jiang
 Description: Different loss-functions (MSE, MAE and cross entropy)
 """
 import numpy as np
