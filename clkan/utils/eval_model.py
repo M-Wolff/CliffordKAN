@@ -10,7 +10,7 @@ import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import confusion_matrix
 
-from cvkan.models.CliffordKAN import CliffordKAN
+from clkan.models.CliffordKAN import CliffordKAN
 
 def batched_forward(model, data, batch_size):
     predictions = []

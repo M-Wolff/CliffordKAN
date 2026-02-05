@@ -17,7 +17,10 @@ if __name__ == "__main__":
     parser.add_argument("--metric", type=comma_separated_ints, default=None, help="Type of Metric to use. Specify as [a,b,...] with brackets")
     parser.add_argument("--num_grids", type=int, default=8, help="Number of grid points to use")
 
+
     args = parser.parse_args()
+    if args.model in ["all", "pykan", "fastkan"]:
+        raise NotImplementedError("PyKAN and FastKAN might not work correctly in our code and were not scope of our analysis. Please don't use them!")
     print("Running Function Fitting Eperiments for Dataset ", args.dataset, " and Model ", args.model, " and Task ", args.task)
     # check if clifford_grid and clifford_rbf exist, if model is cliffkan or all, otherwise throw error
     if args.model in ["cliffkan", "all"]:
