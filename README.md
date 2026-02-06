@@ -3,7 +3,7 @@ Authors: Matthias Wolff<sup>1</sup>, Francesco Alesiani<sup>2</sup>, Christof Du
 <sup>1</sup>: University of Münster, Department of Computer Science\
 <sup>2</sup>: NEC Laboratories Europe GmbH
 
-Link to Paper: [TBA]\
+Link to Paper: [https://arxiv.org/abs/2602.05977](https://arxiv.org/abs/2602.05977)\
 This repository contains the codebase to the aforementioned paper and is <big>**Work In Progress**</big>, as we are still cleaning the code and documenting it better.
 
 
