@@ -1,9 +1,9 @@
 # This file was created mostly by ChatGPT 5.2 with small changes from us
 from pathlib import Path
-import pandas as pd
+
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
+import seaborn as sns
 
 from clkan.utils.plotting.pandas_dataloader import load_json_make_pandas
 
@@ -14,27 +14,24 @@ CONFIG = {
     # dataframe column names
     "dataset_col": "dataset_name",
     "x_col": "num_grids",
-    "layers_col": "layers",              # architecture definition (e.g. "64,64")
+    "layers_col": "layers",  # architecture definition (e.g. "64,64")
     "batchnorm_col": "use_norm",
     "grid_col": "extra_args.clifford_grid",
     "clifford_type_col": "extra_args.clifford_rbf",  # "naive" or "cliffordspace"
-
     # metrics to plot
     "metrics": {
         "mse": {"mean": "test_losses.mean.mse", "std": "test_losses.std.mse"},
         "mae": {"mean": "test_losses.mean.mae", "std": "test_losses.std.mae"},
     },
-
     # figure / style
     "figsize": (16, 4),
     "palette": "tab10",
     "alpha": 0.85,
     "dpi": 100,
-
     # marker configuration
-    "marker_size": 50,     
-    "x_jitter_frac": 0.45,      # horizontal jitter inside bins
-    "sep_alpha": 0.8,          # vertical separator visibility
+    "marker_size": 50,
+    "x_jitter_frac": 0.45,  # horizontal jitter inside bins
+    "sep_alpha": 0.8,  # vertical separator visibility
 }
 
 from matplotlib.lines import Line2D
@@ -55,7 +52,7 @@ def plot_experiment_results(df, CONFIG):
     Ordering inside each x-bin is kept identical to the previous implementation.
     """
 
-    sns.set(style="whitegrid", context="paper", font_scale=1.3)
+    sns.set(style="whitegrid", context="paper", font_scale=1.7)
 
     # -------------------------
     # Column shortcuts
@@ -95,7 +92,6 @@ def plot_experiment_results(df, CONFIG):
             "naive": "_",
         }
 
-
         # Ordering inside bins (unchanged)
         clifford_order = ["cliffordspace", "naive"]
 
@@ -119,20 +115,18 @@ def plot_experiment_results(df, CONFIG):
             df_ck = df_ds[df_ds[MODEL] == "CliffordKAN"]
 
             x_bins.append(("CliffordKAN", "full_grid"))
-            x_labels.append("F")
+            x_labels.append("ClKAN (F)")
 
-            #x_bins.append(("CliffordKAN", "independant_grid"))
-            #x_labels.append("I")
+            # x_bins.append(("CliffordKAN", "independant_grid"))
+            # x_labels.append("I")
 
             # random grid bins, one per grid count
-            random_grids = sorted(
-                df_ck[df_ck[GRID] == "random_grid"][XCOL].unique()
-            )
+            random_grids = sorted(df_ck[df_ck[GRID] == "random_grid"][XCOL].unique())
             for ng in random_grids:
-                if ng not in [2,3,4,6,8]:
+                if ng not in [2, 3, 4, 6, 8]:
                     continue
                 x_bins.append(("CliffordKAN", "random_grid", ng))
-                x_labels.append(f"S-{ng}")
+                x_labels.append(f"ClKAN (S-{ng})")
 
             # =========================
             # Plot bins
@@ -156,7 +150,8 @@ def plot_experiment_results(df, CONFIG):
                 g["_order"] = [
                     (
                         layers_list.index(r[LAYERS]),
-                        bn_list.index(r[BN]),clifford_order_dict.get(r[CLIFFORD], 999),
+                        bn_list.index(r[BN]),
+                        clifford_order_dict.get(r[CLIFFORD], 999),
                     )
                     for _, r in g.iterrows()
                 ]
@@ -166,7 +161,8 @@ def plot_experiment_results(df, CONFIG):
                 n = len(g)
                 offsets = (
                     np.linspace(-CONFIG["x_jitter_frac"], CONFIG["x_jitter_frac"], n)
-                    if n > 1 else [0.0]
+                    if n > 1
+                    else [0.0]
                 )
 
                 # -------------------------
@@ -190,7 +186,12 @@ def plot_experiment_results(df, CONFIG):
                     elif last_was_small == -1 and is_large_arch:
                         last_was_small = False
                     if last_was_small and is_large_arch:
-                        plt.axvspan(small_arches[0]-0.04, (small_arches[-1] + x)/2,  color="grey", alpha=0.4)
+                        plt.axvspan(
+                            small_arches[0] - 0.04,
+                            (small_arches[-1] + x) / 2,
+                            color="grey",
+                            alpha=0.4,
+                        )
                         small_arches = []
                     if is_large_arch:
                         big_arches.append(x)
@@ -199,7 +200,7 @@ def plot_experiment_results(df, CONFIG):
                         small_arches.append(x)
                         last_was_small = True
 
-                    mfc = color# if is_large_arch else "none"
+                    mfc = color  # if is_large_arch else "none"
                     mec = color
 
                     ax.errorbar(
@@ -221,7 +222,7 @@ def plot_experiment_results(df, CONFIG):
             # =========================
             ax.set_xticks(range(len(x_bins)))
             ax.set_xticklabels(x_labels)
-            ax.set_xlabel("Model / Grid strategy")
+            ax.set_xlabel("Model (Grid strategy)")
             ax.set_ylabel(metric.upper())
             ax.set_title(f"{dataset[3:]}")
 
@@ -241,17 +242,29 @@ def plot_experiment_results(df, CONFIG):
             # BatchNorm legend (color)
             bn_legend = [
                 Line2D(
-                    [0], [0], marker="o", color="none",
-                    markerfacecolor=bn_color[b], markeredgecolor=bn_color[b],
-                    label=b, markersize=10
+                    [0],
+                    [0],
+                    marker="o",
+                    color="none",
+                    markerfacecolor=bn_color[b],
+                    markeredgecolor=bn_color[b],
+                    label=b,
+                    markersize=10,
                 )
                 for b in bn_list
             ]
 
             # RBF type legend (shape)
             rbf_legend = [
-                Line2D([0], [0], marker=m, color="black",
-                       linestyle="none", label=k, markersize=10)
+                Line2D(
+                    [0],
+                    [0],
+                    marker=m,
+                    color="black",
+                    linestyle="none",
+                    label=k,
+                    markersize=10,
+                )
                 for k, m in rbf_marker.items()
             ]
 
@@ -260,33 +273,46 @@ def plot_experiment_results(df, CONFIG):
             for layer in layers_list:
                 is_large_arch = layer != layers_list[0]
                 arch_legend.append(
-                        Line2D(
-                            [0], [0],
-                            marker="o",
-                            color="black",
-                            linestyle="none",
-                            markerfacecolor="black" if is_large_arch else "none",
-                            markeredgecolor="black",
-                            label=layer,
-                            markersize=10,
-                            )
-                        )
+                    Line2D(
+                        [0],
+                        [0],
+                        marker="o",
+                        color="black",
+                        linestyle="none",
+                        markerfacecolor="black" if is_large_arch else "none",
+                        markeredgecolor="black",
+                        label=layer,
+                        markersize=10,
+                    )
+                )
             if dataset == "ff_square":
-                leg1 = ax.legend(handles=bn_legend, title="BatchNorm", loc="upper left", labelspacing=0.2)#,bbox_to_anchor=(0.4, 0))
+                leg1 = ax.legend(
+                    handles=bn_legend,
+                    title="BatchNorm",
+                    loc="upper left",
+                    labelspacing=0.2,
+                )  # ,bbox_to_anchor=(0.4, 0))
                 ax.add_artist(leg1)
-                leg2 = ax.legend(handles=rbf_legend, title="RBF type", loc="upper right", labelspacing=0.2)#,bbox_to_anchor=(0.65, 0))
+                leg2 = ax.legend(
+                    handles=rbf_legend,
+                    title="RBF type",
+                    loc="upper right",
+                    labelspacing=0.2,
+                )  # ,bbox_to_anchor=(0.65, 0))
                 ax.add_artist(leg2)
-            #ax.legend(handles=arch_legend, title="Architecture size", loc="lower center", labelspacing=0.2)
+            # ax.legend(handles=arch_legend, title="Architecture size", loc="lower center", labelspacing=0.2)
 
-            ax.set_yscale("log")#, linthresh=1)
-            ax.set_xlim(-0.5,6.5)
+            ax.set_yscale("log")  # , linthresh=1)
+            ax.set_xlim(-0.5, 6.5)
             plt.tight_layout()
             plt.savefig(f"{metric}-{dataset}.svg", bbox_inches="tight")
-            #plt.show()
+            # plt.show()
 
 
 if __name__ == "__main__":
-    results_df = load_json_make_pandas(Path(__file__).parent.parent.parent / "experiments/results.json", filter_option="funcfit")
+    results_df = load_json_make_pandas(
+        Path(__file__).parent.parent.parent / "experiments/results.json",
+        filter_option="funcfit",
+    )
     print(len(results_df))
-    plot_experiment_results(results_df,CONFIG)
-    
+    plot_experiment_results(results_df, CONFIG)

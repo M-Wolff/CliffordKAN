@@ -25,9 +25,9 @@ axs[2].set_title("random grid (Sobol)")
 
 for ax in axs:
     ax.set_aspect("equal")
+    ax.tick_params(labelbottom=False, labelleft=False)
 
 plt.rcParams.update({'font.size': 16})
 plt.tight_layout()
 plt.savefig("grid-comparison.svg", bbox_inches="tight")
 #plt.show()
-
