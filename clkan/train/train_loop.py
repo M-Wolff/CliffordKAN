@@ -3,20 +3,33 @@ File: train_loop.py
 Author: Matthias Wolff, Florian Eilers, Christof Duhme, Xiaoyi Jiang
 Description: Main loop for training all kinds of KANs on any dataset with arbitrary loss functions
 """
+
 import torch
+from cvkan.models.wrapper import PyKANWrapper
 from torch.utils.data import DataLoader
 
 from clkan.models.CliffordKAN import CliffordKAN
 from clkan.utils.early_stopping import EarlyMinStopper
 
-from ..models.wrapper import PyKANWrapper 
 from ..utils.dataloading.csv_dataloader import CSVDataset
 from ..utils.eval_model import eval_model
 from ..utils.misc import get_num_parameters
 
-def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=torch.device("cuda"), epochs=5000,
-               batch_size=1000, kan_explainer=None, logging_interval=50, add_softmax_lastlayer=False, last_layer_output_real=True, sparsify=False):
 
+def train_kans(
+    model,
+    dataset: CSVDataset,
+    loss_fn_backprop,
+    loss_fns,
+    device=torch.device("cuda"),
+    epochs=5000,
+    batch_size=1000,
+    kan_explainer=None,
+    logging_interval=50,
+    add_softmax_lastlayer=False,
+    last_layer_output_real=True,
+    sparsify=False,
+):
     """
     Train KANs for different datasets. Suitable for complex and real-valued KANs
     :param model: model to train
@@ -37,30 +50,54 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
     """
     # move model to correct device
     model.to(device)
-    loss_fn_backprop_name = [k for k,v in loss_fns.items() if type(v) == type(loss_fn_backprop)]
+    loss_fn_backprop_name = [
+        k for k, v in loss_fns.items() if type(v) == type(loss_fn_backprop)
+    ]
     assert len(loss_fn_backprop_name) == 1
     loss_fn_backprop_name = loss_fn_backprop_name[0]
-    if type(model) == PyKANWrapper:  # pyKAN (needs to be wrapper, because pykan does not store certain attributes by itself...)
+    if (
+        type(model) == PyKANWrapper
+    ):  # pyKAN (needs to be wrapper, because pykan does not store certain attributes by itself...)
         # move dataset (without batching) to correct device
         dataset.to(device)
         # normalize dataset for pykan
         dataset.normalize_for_pykan()
         # update the model's grid from train samples
         model.update_grid_from_samples(dataset.data["train_input"])
+
         # pykan needs an eval-loss function that can be executed **without** any parameters. So the dataset (test split)
         # has to be hard-coded into the loss function for some reason...
         def hardcoded_pykan_testloss_metric():
             """Why would anybody program it like this?! Why not just make test GT and Prediction a parameter
             like every other loss function?..."""
-            return loss_fn_backprop(model(dataset.data["test_input"].to(device)), dataset.data["test_label"].to(device))
+            return loss_fn_backprop(
+                model(dataset.data["test_input"].to(device)),
+                dataset.data["test_label"].to(device),
+            )
+
         # fit the model
-        model.fit(dataset=dataset.data, opt="LBFGS", steps=epochs, loss_fn=loss_fn_backprop, batch=batch_size,
-                  metrics = [hardcoded_pykan_testloss_metric], display_metrics=["hardcoded_pykan_testloss_metric"])
+        model.fit(
+            dataset=dataset.data,
+            opt="LBFGS",
+            steps=epochs,
+            loss_fn=loss_fn_backprop,
+            batch=batch_size,
+            metrics=[hardcoded_pykan_testloss_metric],
+            display_metrics=["hardcoded_pykan_testloss_metric"],
+        )
         # evaluate the trained model on all loss functions
-        losses = eval_model(model, loss_fns, data_dict=dataset.data,
-                                    add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train", "val", "test"])
+        losses = eval_model(
+            model,
+            loss_fns,
+            data_dict=dataset.data,
+            add_softmax_lastlayer=add_softmax_lastlayer,
+            batch_size=batch_size,
+            splits_to_eval=["train", "val", "test"],
+        )
         for split in losses.keys():
-            print(f"Final {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
+            print(
+                f"Final {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}"
+            )
         return losses["train"], losses["val"], losses["test"], None
     # if model is not PyKAN Wrapper, check if batch_size is > 0 (for pykan batch size should be -1)
     assert batch_size > 0, f"Model {type(model)} has Batch-Size {batch_size} <= 0!"
@@ -69,8 +106,10 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
     # decay learning rate by 0.6 every epochs//10 steps
-    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.9, patience=20, threshold=0.001)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=epochs // 10, gamma=0.6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.9, patience=20, threshold=0.001
+    )
     early_stopper = EarlyMinStopper(patience=200, threshold=0.001)
 
     # train loop
@@ -82,10 +121,18 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
         # evaluate without grads
         with torch.no_grad():
             if epoch % logging_interval == 0 and epoch != 0:
-                losses = eval_model(model, loss_fns, data_dict=dataset.data,
-                                                       add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train", "val", "test"])
+                losses = eval_model(
+                    model,
+                    loss_fns,
+                    data_dict=dataset.data,
+                    add_softmax_lastlayer=add_softmax_lastlayer,
+                    batch_size=batch_size,
+                    splits_to_eval=["train", "val", "test"],
+                )
                 for split in losses.keys():
-                    print(f"Epoch {epoch} {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
+                    print(
+                        f"Epoch {epoch} {split} Loss: {[(lfn, l.item()) for lfn, l in losses[split].items()]}"
+                    )
                 print(f"LR: {scheduler.get_last_lr()}")
         # iterate over all batches in train dataloader
         model.train()
@@ -99,7 +146,7 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                     train_predictions = output.real
                 elif isinstance(model, CliffordKAN):
                     # Clifford
-                    train_predictions = output[...,0]
+                    train_predictions = output[..., 0]
                 else:
                     raise NotImplementedError()
             else:
@@ -110,20 +157,41 @@ def train_kans(model, dataset: CSVDataset, loss_fn_backprop, loss_fns, device=to
                 sparsity_regularization = 0
                 kan_explainer.calc_relevances_pykan()
                 for k in kan_explainer.edge_relevances.keys():
-                    sparsity_regularization += 1*(kan_explainer.get_edge_relevance(k).abs()).sum()
+                    sparsity_regularization += (
+                        1 * (kan_explainer.get_edge_relevance(k).abs()).sum()
+                    )
                 train_loss = train_loss + sparsity_regularization
             train_loss.backward()
 
             optimizer.step()
             optimizer.zero_grad()
-        losses = eval_model(model, loss_fns, data_dict=dataset.data, add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["val"])
+        losses = eval_model(
+            model,
+            loss_fns,
+            data_dict=dataset.data,
+            add_softmax_lastlayer=add_softmax_lastlayer,
+            batch_size=batch_size,
+            splits_to_eval=["val"],
+        )
         val_losses = losses["val"]
         scheduler.step(val_losses[loss_fn_backprop_name])
         early_stopper.step(val_losses[loss_fn_backprop_name])
     # Final evaluation
-    losses = eval_model(model, loss_fns, data_dict=dataset.data,
-                                           add_softmax_lastlayer=add_softmax_lastlayer, batch_size=batch_size, splits_to_eval=["train","val", "test"])
+    losses = eval_model(
+        model,
+        loss_fns,
+        data_dict=dataset.data,
+        add_softmax_lastlayer=add_softmax_lastlayer,
+        batch_size=batch_size,
+        splits_to_eval=["train", "val", "test"],
+    )
     for split in losses.keys():
-        print(f"Final {split} Losses: {[(lfn, l.item()) for lfn, l in losses[split].items()]}")
-    extra_infos = {"final_epoch": epoch, "final_lr": scheduler.get_last_lr(), "best_seen_val_loss": float(early_stopper.best_value.item())}
+        print(
+            f"Final {split} Losses: {[(lfn, l.item()) for lfn, l in losses[split].items()]}"
+        )
+    extra_infos = {
+        "final_epoch": epoch,
+        "final_lr": scheduler.get_last_lr(),
+        "best_seen_val_loss": float(early_stopper.best_value.item()),
+    }
     return losses["train"], losses["val"], losses["test"], extra_infos
