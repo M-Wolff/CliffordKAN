@@ -1,3 +1,5 @@
 {
-  "extraPaths": ["/home/m_wolf37/Sciebo/Doktorand/Workspace/libraries/torch_ga"]
+  "extraPaths": [
+    "/home/m_wolf37/Sciebo/Doktorand/Workspace/libraries/torch_ga/"
+  ]
 }
