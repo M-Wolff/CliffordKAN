@@ -22,8 +22,6 @@ from clkan.experiments.run_crossval import run_crossval
 from clkan.models.CliffordKAN import CliffordKAN
 from clkan.utils.dataloading.csv_dataloader import CSVDataset
 
-_DEVICE = "cuda"
-
 
 def load_knot_dataset_real(
     input_filename=Path("/scratch/tmp/m_wolf37/Datasets/knot_theory_invariants.csv"),
