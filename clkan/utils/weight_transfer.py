@@ -80,9 +80,7 @@ def map_weights_cvkan_to_cliffkan(cvkan: CVKAN, cliffkan: CliffordKAN):
 
 def train_and_compare(cliffkan: CliffordKAN, cvkan: CVKAN):
     k = 5
-    _DATASET_SAVEDIR = Path(
-        "/home/m_wolf37/Sciebo/Doktorand/Workspace/Alesiani-KANs/CliffordKAN/cvkan/experiments/generated_datasets/"
-    )
+    _DATASET_SAVEDIR = Path("clkan/experiments/generated_datasets/")
     loss_fns = {"MSE": MSE(ga=cliffkan.algebra), "MAE": MAE(ga=cliffkan.algebra)}
     loss_fn_backprop = loss_fns["MSE"]
     sqsq = lambda x: ((x[:, [0]]) ** 2 + x[:, [1]] ** 2) ** 2
