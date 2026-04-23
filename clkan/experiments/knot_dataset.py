@@ -196,8 +196,7 @@ def run_experiments_knot(run_model, extra_args):
     _DEVICE = torch.device("cuda")
     norm_to_use = Norms(extra_args["norm"])
     num_grids = extra_args["num_grids"]
-    # load knot complex and real-valued with 100% train split
-    # use 100% train split because run_crossval expects it this way and splits it into 5 non-overlapping folds
+    # load knot data with a fixed holdout test split; run_crossval will only split the training portion into folds
     knot_dataset_real = load_knot_dataset_real(train_test_split="70:30")
     knot_dataset_complex = convert_knot_real_to_complex(knot_dataset_real)
     knot_dataset_cliff = convert_knot_complex_to_clifford(knot_dataset_complex)
@@ -290,57 +289,6 @@ def run_experiments_knot(run_model, extra_args):
                 epochs=5000,
                 convert_model_output_to_real=True,
             )
-
-
-def train_knot_feature_subset():
-    """Training on the Knot Dataset on the most important 3 or 7 features only
-    as well as on the inverse set of every feature except the most important 3 or 7"""
-    # use 100% train split because run_crossval expects it this way and splits it into 5 non-overlapping folds
-    knot_dataset = load_knot_dataset(train_test_split="100:0", complex_dataset=True)
-    # indices for features to train on
-    indices_big = [1, 2, 3, 5, 6, 7, 8]
-    indices_small = [2, 6, 7]
-    indices_big_inverse = [0, 4, 9, 10, 11, 12, 13, 14]
-    indices_small_inverse = [0, 1, 3, 4, 5, 8, 9, 10, 11, 12, 13, 14]
-
-    num_classes = 14
-    _DEVICE = torch.device("cuda")
-    crossentropy_loss = torch.nn.CrossEntropyLoss()
-
-    loss_fns = dict()
-    loss_fns["cross_entropy"] = crossentropy_loss
-    loss_fns["accuracy"] = torchmetrics.Accuracy(
-        task="multiclass", num_classes=num_classes
-    ).to(_DEVICE)
-    # train only on a specific subset of input-features
-    for indices in [
-        indices_small,
-        indices_big,
-        indices_small_inverse,
-        indices_big_inverse,
-    ]:
-        cvkan = CVKANWrapper(
-            layers_hidden=[len(indices), 1, 14],
-            num_grids=8,
-            rho=1,
-            use_norm=Norms.BatchNorm,
-            grid_mins=-2,
-            grid_maxs=2,
-            zsilu_type="complex_weight",
-        )
-        train_input = knot_dataset.data["train_input"][:, indices]
-        # reduce dataset to the specified subset of features
-        knot_dataset_complex_reduced = dict()
-        knot_dataset_complex_reduced["train_input"] = train_input
-        knot_dataset_complex_reduced["train_label"] = knot_dataset.data["train_label"]
-        knot_dataset_complex_reduced["test_label"] = knot_dataset.data["test_label"]
-        knot_dataset_complex_reduced["test_input"] = knot_dataset.data["test_label"]
-        knot_dataset_complex_reduced = CSVDataset(
-            knot_dataset_complex_reduced,
-            input_vars=[knot_dataset.input_varnames[i] for i in indices],
-            output_vars=knot_dataset.output_varnames,
-            categorical_vars=[],
-        )
 
         run_crossval(
             cvkan,
