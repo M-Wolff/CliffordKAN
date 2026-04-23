@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader
 from clkan.models.CliffordKAN import CliffordKAN
 from clkan.utils.early_stopping import EarlyMinStopper
 
-from ..utils.dataloading.csv_dataloader import CSVDataset
-from ..utils.eval_model import eval_model
-from ..utils.misc import get_num_parameters
+from clkan.utils.dataloading.csv_dataloader import CSVDataset
+from clkan.utils.eval_model import eval_model
+from clkan.utils.misc import get_num_parameters
 
 
 def train_kans(

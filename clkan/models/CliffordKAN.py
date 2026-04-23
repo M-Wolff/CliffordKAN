@@ -8,7 +8,7 @@ Description: Clifford-KAN Model definition
 from typing import List
 import torch
 from torch_ga.clifford import CliffordAlgebra
-from ..utils.norm_functions import ComponentwiseBatchNorm1d, NodewiseBatchNorm1d, DimensionwiseBatchNorm1d, Norms
+from clkan.utils.norm_functions import ComponentwiseBatchNorm1d, NodewiseBatchNorm1d, DimensionwiseBatchNorm1d, Norms
 
 def create_gridnd_full(grid_min, grid_max, num_grids, num_dim):
     axes = [

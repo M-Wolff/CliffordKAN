@@ -13,10 +13,10 @@ import numpy as np
 import torch
 import filelock
 
-from ..train.train_loop import train_kans
-from ..utils.dataloading.crossval_splitter import split_crossval
-from ..utils.dataloading.csv_dataloader import CSVDataset
-from ..utils.misc import get_num_parameters
+from clkan.train.train_loop import train_kans
+from clkan.utils.dataloading.crossval_splitter import split_crossval
+from clkan.utils.dataloading.csv_dataloader import CSVDataset
+from clkan.utils.misc import get_num_parameters
 
 
 def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_backprop, loss_fns, batch_size, device=torch.device("cuda"), logging_interval=100, add_softmax_lastlayer=False, epochs=500, convert_model_output_to_real=True, k=5):
