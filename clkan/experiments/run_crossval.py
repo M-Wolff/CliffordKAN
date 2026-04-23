@@ -21,9 +21,10 @@ from ..utils.misc import get_num_parameters
 
 def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_backprop, loss_fns, batch_size, device=torch.device("cuda"), logging_interval=100, add_softmax_lastlayer=False, epochs=500, convert_model_output_to_real=True, k=5):
     """
-    Runs cross-validaiton on a given dataset
+    Runs repeated train/val folds on the training split of a dataset while reusing a fixed test split.
     :param model: Model to train
-    :param dataset_full_train: CSVDataset object that only contains training data and zero test data for splitting into k folds
+    :param dataset_full_train: CSVDataset object whose train split is partitioned into k non-overlapping
+    train/val folds. Any existing test split is kept fixed and evaluated for every fold.
     :param dataset_name: Name of the dataset (for logging purposes only)
     :param loss_fn_backprop: Loss function to use for backpropagation
     :param loss_fns: dictionary of additional loss functions (also including loss_fn_backprop) to evaluate and save
@@ -34,11 +35,11 @@ def run_crossval(model, dataset_full_train: CSVDataset, dataset_name, loss_fn_ba
     :param epochs: epochs to train for
     :param convert_model_output_to_real: should be True only if model produces complex-valued output but
     we need real-valued output. Essentially does model(x).real instead of only model(x)
-    :param k: number of folds to do cross-validation on
+    :param k: number of train/val folds to create from the training split
     :return: None
     """
-    # generate k-fold cv (usually k=5)
-    datasets = split_crossval(dataset_full_train, k=k)  # returns list of datasets (with different crossval splits each)
+    # generate k train/val folds from the training split while keeping any existing test split unchanged
+    datasets = split_crossval(dataset_full_train, k=k)  # returns list of datasets with different train/val folds
     num_folds = len(datasets)
     # build dictionary to store the results into
     results = dict()
