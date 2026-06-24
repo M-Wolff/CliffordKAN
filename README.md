@@ -6,7 +6,7 @@ Authors: Matthias Wolff<sup>1</sup>, Francesco Alesiani<sup>2</sup>, Christof Du
 
 Paper: [Clifford Kolmogorov-Arnold Networks](https://arxiv.org/abs/2602.05977)
 
-This repository contains the code for Clifford Kolmogorov-Arnold Networks (ClKAN). It is still work in progress while the code and documentation are being cleaned up.
+This repository contains the code for Clifford Kolmogorov-Arnold Networks (ClKAN). If you spot any mistakes or have trouble reproducing our results, please create an issue here or write us an email.
 
 ## Abstract
 
