@@ -5,7 +5,7 @@ Description: Main loop for training all kinds of KANs on any dataset with arbitr
 """
 
 import torch
-from cvkan.models.wrapper import PyKANWrapper
+from cvkan.models.wrapper.PyKANWrapper import PyKANWrapper
 from torch.utils.data import DataLoader
 
 from clkan.models.CliffordKAN import CliffordKAN
