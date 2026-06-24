@@ -43,7 +43,7 @@ def plot_experiment_results(df, CONFIG):
     ---------------------------
     * RBF type (always cliffordspace)
     * Normalization (always node-wise)
-    * CVKANWrapper (no longer exists)
+    * CVKANWrapper baseline is not part of these high-dimensional plots
 
     Visual encoding:
     ----------------
