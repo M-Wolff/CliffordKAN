@@ -20,7 +20,6 @@ We introduce Clifford Kolmogorov-Arnold Network (ClKAN), a flexible and efficien
 - [Experiment CLI](#experiment-cli)
 - [Metric and Signature Notes](#metric-and-signature-notes)
 - [Repository Structure](#repository-structure)
-- [Related Repositories](#related-repositories)
 
 ## Quick Start
 
