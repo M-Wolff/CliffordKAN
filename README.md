@@ -16,6 +16,7 @@ We introduce Clifford Kolmogorov-Arnold Network (ClKAN), a flexible and efficien
 
 - [Quick Start](#quick-start)
 - [Demo Scripts](#demo-scripts)
+- [Expected Demo Output](#expected-demo-output)
 - [Experiment Results](#experiment-results)
 - [Experiment CLI](#experiment-cli)
 - [Metric and Signature Notes](#metric-and-signature-notes)
@@ -33,9 +34,9 @@ The package metadata in `pyproject.toml` is intentionally lighter than the exper
 
 ## Demo Scripts
 
-Two CPU demos are available under [`examples/`](examples/). They train directly with PyTorch on cached paper datasets and do not append to `clkan/experiments/results.json`.
+Two demo scripts are available under [`examples/`](examples/). They default to CUDA when available, train directly with PyTorch on cached paper datasets, and do not append to `clkan/experiments/results.json`.
 
-Train a ClKAN on complex squaring using `Cl(0,1)`:
+Train a ClKAN on complex squaring using `Cl(0,1)` with [`examples/demo_complex_clkan.py`](examples/demo_complex_clkan.py):
 
 ```bash
 python examples/demo_complex_clkan.py
@@ -43,7 +44,7 @@ python examples/demo_complex_clkan.py
 
 This loads [`clkan/experiments/generated_datasets/ff_square.pt`](clkan/experiments/generated_datasets/ff_square.pt) and uses paper-comparable defaults: `5000` cached train samples, `5000` test samples, a fold-0 style `4000/1000` train/validation split, `epochs=5000`, `batch_size=500`, `AdamW(lr=0.1)`, `ReduceLROnPlateau(factor=0.9, patience=20, threshold=0.001)`, `rho=1`, `full_grid`, `cliffordspace`, and `batchnorm_node-wise`.
 
-Train a ClKAN on the cached high-dimensional Clifford square dataset with metric `[1, 1]`:
+Train a ClKAN on the cached high-dimensional Clifford square dataset with metric `[1, 1]` using [`examples/demo_clifford_cached.py`](examples/demo_clifford_cached.py):
 
 ```bash
 python examples/demo_clifford_cached.py
@@ -77,8 +78,27 @@ Useful flags:
 - `--num-grids`: default `8` for `ff_square` and `2` for the cached Clifford random-grid example.
 - `--hidden`: `0` uses the shallow `[1, 1]` architecture; `2` uses `[1, 2, 1]`, matching the second square architecture used in the experiment code.
 - `--dataset`: path to a compatible cached `.pt` dataset if you want to swap the default cache file.
+- `--device`: default `cuda` if available, otherwise `cpu`.
 
 Each demo prints the dataset, metric/signature, architecture, grid/RBF/norm settings, batch size, epoch count, LR, and periodic train/validation/test MSE. The scripts intentionally do not call `run_crossval.py`, so they do not append to `clkan/experiments/results.json`.
+
+## Expected Demo Output
+
+Full default demo runs on an NVIDIA RTX 4070 with CUDA produced the following final lines. Small numeric differences are expected across GPUs, PyTorch/CUDA versions, and random initializations.
+
+[`examples/demo_complex_clkan.py`](examples/demo_complex_clkan.py):
+
+```text
+dataset=ff_square metric=[-1] signature=(0,1,0) layers=[1, 1] num_grids=8 grid=full_grid rbf=cliffordspace norm=batchnorm_node-wise batch_size=500 epochs=5000 lr=0.1 device=cuda
+epoch=4999 train_mse=0.008793 val_mse=0.010957 test_mse=0.009711 lr=0.000000
+```
+
+[`examples/demo_clifford_cached.py`](examples/demo_clifford_cached.py):
+
+```text
+dataset=clifford_square_[1, 1]_80000 metric=[1,1] signature=(2,0,0) layers=[1, 1] num_grids=2 grid=random_grid rbf=cliffordspace norm=batchnorm_node-wise batch_size=2000 epochs=5000 lr=0.1 device=cuda
+epoch=4999 train_mse=3.572448 val_mse=3.440806 test_mse=3.435062 lr=0.000000
+```
 
 ## Experiment Results
 
@@ -100,12 +120,12 @@ Supported practical model values are `cvkan` and `cliffkan`. The CLI rejects `py
 
 Important Clifford options:
 
-- `--clifford_grid`: `full_grid` or `random_grid` are usable; the CLI also accepts the misspelled `independant_grid`, but `CliffordKANLayer` currently raises `NotImplementedError` for it.
+- `--clifford_grid`: use `full_grid` or `random_grid`.
 - `--clifford_rbf`: `naive` or `cliffordspace`.
 - `--norm`: values from `Norms`, for example `batchnorm_comp-wise`, `batchnorm_dim-wise`, `batchnorm_node-wise`, or `nonorm`.
 - `--metric`: used by `--task highdims`, specified with brackets, for example `--metric [1,1]`.
 
-Most experiment code defaults to CUDA. CPU-only runs may need small code changes or the demo scripts above.
+Most experiment code defaults to CUDA. The demo scripts also default to CUDA when available and can be forced to CPU with `--device cpu`.
 
 ## Metric and Signature Notes
 
