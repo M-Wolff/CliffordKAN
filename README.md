@@ -4,7 +4,12 @@ Authors: Matthias Wolff<sup>1</sup>, Francesco Alesiani<sup>2</sup>, Christof Du
 <sup>1</sup>: University of Münster, Department of Computer Science  
 <sup>2</sup>: NEC Laboratories Europe GmbH
 
-Paper: [Clifford Kolmogorov-Arnold Networks](https://arxiv.org/abs/2602.05977)
+Conference Paper:
+M. Wolff, F. Alesiani, C. Duhme and X. Jiang, "Clifford Kolmogorov-Arnold Networks," 2026 International Joint Conference on Neural Networks (IJCNN), Maastricht, Netherlands, 2026, pp. 1-8, doi: 10.1109/IJCNN69854.2026.11728617.
+
+Available on IEEEXplore: [https://ieeexplore.ieee.org/document/11728617](https://ieeexplore.ieee.org/document/11728617)
+
+Link to arXiv Paper: [https://arxiv.org/abs/2602.05977](https://arxiv.org/abs/2602.05977)
 
 This repository contains the code for Clifford Kolmogorov-Arnold Networks (ClKAN). If you spot any mistakes or have trouble reproducing our results, please create an issue here or write us an email.
 
